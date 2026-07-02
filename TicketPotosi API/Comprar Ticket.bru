@@ -1,0 +1,21 @@
+meta {
+  name: Comprar Ticket
+  type: http
+  seq: 7
+}
+
+post {
+  url: http://127.0.0.1:8000/api/tickets/purchase
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: 3|nED6z6ithktGkHiyk8XgVqMtdiFfdJPF75Br1cWT09addb7a
+}
+
+body:json {
+  {
+      "ticket_type_id": 1
+  }
+}

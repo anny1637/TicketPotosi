@@ -1,0 +1,27 @@
+meta {
+  name: Crear Evento
+  type: http
+  seq: 4
+}
+
+post {
+  url: http://127.0.0.1:8000/api/events
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: 1|VVUYJjEG7wgNRC0VhKYNmqCnt7M1Qs8R4g7w9EiTdcaf809c
+}
+
+body:json {
+  {
+      "title": "Festival Potosí 2026",
+      "description": "El mejor festival de música de Potosí",
+      "location": "Plaza 10 de Noviembre, Potosí",
+      "event_date": "2026-07-15 20:00:00",
+      "capacity": 500,
+      "tickets_available": 500,
+      "status": "active"
+  }
+}

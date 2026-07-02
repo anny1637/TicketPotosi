@@ -1,0 +1,21 @@
+meta {
+  name: Validar QR
+  type: http
+  seq: 8
+}
+
+post {
+  url: http://127.0.0.1:8000/api/tickets/validate-qr
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: 5|NaHzC8r9GrjesZl2GKergRpHvcmJgh6jJRkCWrrsb0dd88f3
+}
+
+body:json {
+  {
+      "qr_token": "c2617034-c10f-4ac0-b0f3-da65e8adfd7f"
+  }
+}
