@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../main.dart' show AppColors;
+import '../../services/pdf_service.dart';
 
 class AdminReportsScreen extends StatefulWidget {
   const AdminReportsScreen({super.key});
@@ -61,6 +62,12 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           },
         ),
         actions: [
+          if (_selectedEventReport != null)
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_rounded, color: Colors.white),
+              tooltip: 'Exportar Reporte PDF',
+              onPressed: () => PdfService.printEventReport(_selectedEventReport!),
+            ),
           IconButton(
             onPressed: _loadReport,
             icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),

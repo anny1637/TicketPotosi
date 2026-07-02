@@ -37,6 +37,60 @@ class ApiService {
 
   static void clearUrlCache() => _customBaseUrl = null;
 
+  // Escanea la red WiFi local de forma rápida y en paralelo para hallar la IP del servidor
+  static Future<String?> scanAndSaveServerIp() async {
+    try {
+      final List<io.NetworkInterface> interfaces = await io.NetworkInterface.list(
+        includeLoopback: false,
+        type: io.InternetAddressType.IPv4,
+      );
+
+      String? activeSubnet;
+      for (var interface in interfaces) {
+        for (var addr in interface.addresses) {
+          final ip = addr.address;
+          if (ip.startsWith('192.168.') || ip.startsWith('10.')) {
+            final parts = ip.split('.');
+            activeSubnet = '${parts[0]}.${parts[1]}.${parts[2]}';
+            break;
+          }
+        }
+        if (activeSubnet != null) break;
+      }
+
+      if (activeSubnet == null) return null;
+
+      final List<Future<String?>> tasks = [];
+      // Usamos un cliente HttpClient rápido con timeout corto para barrer rápido
+      final client = io.HttpClient()..connectionTimeout = const Duration(milliseconds: 300);
+
+      for (int i = 1; i <= 254; i++) {
+        final targetIp = '$activeSubnet.$i';
+        tasks.add(Future(() async {
+          try {
+            final uri = Uri.parse('http://$targetIp:8000/api/events');
+            final req = await client.getUrl(uri);
+            final resp = await req.close();
+            if (resp.statusCode == 200) {
+              final newUrl = 'http://$targetIp:8000/api';
+              await setBaseUrl(newUrl);
+              return newUrl;
+            }
+          } catch (_) {}
+          return null;
+        }));
+      }
+
+      final results = await Future.wait(tasks);
+      for (var res in results) {
+        if (res != null) return res;
+      }
+    } catch (e) {
+      debugPrint('[ApiService.scanAndSaveServerIp] Error: $e');
+    }
+    return null;
+  }
+
   // ─── Token management ─────────────────────────────────────────────────────
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -64,8 +118,11 @@ class ApiService {
     await prefs.setString('user_name', user['name'] ?? '');
     await prefs.setString('user_email', user['email'] ?? '');
     await prefs.setInt('user_id', user['id'] ?? 0);
-    await prefs.setInt('user_role_id', user['role_id'] ?? 2);
-    final roleName = user['role']?['name'] ?? (user['role_id'] == 1 ? 'Admin' : 'Cliente');
+    final int roleId = user['role_id'] is int
+        ? user['role_id'] as int
+        : (int.tryParse(user['role_id']?.toString() ?? '') ?? 2);
+    await prefs.setInt('user_role_id', roleId);
+    final roleName = user['role']?['name'] ?? (roleId == 1 ? 'Admin' : 'Cliente');
     await prefs.setString('user_role', roleName);
   }
 
@@ -101,6 +158,28 @@ class ApiService {
   }
 
   // ─── AUTH ─────────────────────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> forgotPassword(
+      String email, String phone, String newPassword) async {
+    final url = await getBaseUrl();
+    try {
+      final res = await http.post(
+        Uri.parse('$url/forgot-password'),
+        headers: _jsonHeaders,
+        body: jsonEncode({
+          'email': email,
+          'phone': phone,
+          'new_password': newPassword,
+        }),
+      ).timeout(_timeout);
+      return _decode(res) as Map<String, dynamic>;
+    } on TimeoutException {
+      throw Exception('El servidor no responde.');
+    } catch (e) {
+      debugPrint('[ApiService.forgotPassword] $e');
+      rethrow;
+    }
+  }
+
   static Future<Map<String, dynamic>> login(String login, String password) async {
     final url = await getBaseUrl();
     try {
@@ -295,12 +374,15 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> purchaseTicket(
-      int ticketTypeId, {String? promoCode}) async {
+      int ticketTypeId, {String? promoCode, String? paymentMethod}) async {
     final url = await getBaseUrl();
     final headers = await authHeaders();
     try {
-      final body = {'ticket_type_id': ticketTypeId};
-      if (promoCode != null) body['promo_code'] = promoCode as Object;
+      final Map<String, dynamic> body = {
+        'ticket_type_id': ticketTypeId,
+        if (paymentMethod != null) 'payment_method': paymentMethod,
+      };
+      if (promoCode != null) body['promo_code'] = promoCode;
       final res = await http.post(
         Uri.parse('$url/tickets/purchase'),
         headers: headers,

@@ -173,13 +173,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
 
       if (mounted) {
-        if (response['event'] != null || response['message'] != null) {
+        if (response['event'] != null) {
           _showMessage(
               _isEditMode ? 'Evento actualizado correctamente' : 'Evento creado correctamente');
           await Future.delayed(const Duration(milliseconds: 800));
           if (mounted) Navigator.pop(context, true);
         } else {
-          _showMessage(response['message'] ?? 'Error al guardar', isError: true);
+          _showMessage(response['message'] ?? 'Error al guardar el evento', isError: true);
         }
       }
     } catch (e) {

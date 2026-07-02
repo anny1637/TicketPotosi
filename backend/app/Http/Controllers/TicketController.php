@@ -8,51 +8,65 @@ use App\Models\Attendance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+use App\Models\Payment;
+
 class TicketController extends Controller
 {
     // COMPRAR TICKET
     public function purchase(Request $request)
-{
-    $request->validate([
-        'ticket_type_id' => 'required|exists:ticket_types,id',
-    ]);
-
-    $ticketType = TicketType::with('event')->find($request->ticket_type_id);
-
-    // Verificar stock
-    if ($ticketType->stock <= 0) {
-        return response()->json([
-            'message' => 'No hay tickets disponibles'
-        ], 400);
-    }
-
-    // Verificar que el evento esté activo
-    if ($ticketType->event->status !== 'active') {
-        return response()->json([
-            'message' => 'El evento no está disponible'
-        ], 400);
-    }
-
-    // Crear ticket y reducir stock
-    $ticket = null;
-
-    DB::transaction(function () use ($request, $ticketType, &$ticket) {
-        $ticket = Ticket::create([
-            'user_id'        => $request->user()->id,
-            'event_id'       => $ticketType->event_id,
-            'ticket_type_id' => $ticketType->id,
-            'status'         => 'paid',
+    {
+        $request->validate([
+            'ticket_type_id' => 'required|exists:ticket_types,id',
+            'payment_method' => 'nullable|string|in:efectivo,qr,banco',
         ]);
 
-        $ticketType->decrement('stock');
-        $ticketType->event->decrement('tickets_available');
-    });
+        $ticketType = TicketType::with('event')->find($request->ticket_type_id);
 
-    return response()->json([
-        'message' => 'Ticket comprado correctamente',
-        'ticket'  => $ticket ? $ticket->load(['event', 'ticketType']) : null,
-    ], 201);
-}
+        // Verificar stock
+        if ($ticketType->stock <= 0) {
+            return response()->json([
+                'message' => 'No hay tickets disponibles'
+            ], 400);
+        }
+
+        // Verificar que el evento esté activo
+        if ($ticketType->event->status !== 'active') {
+            return response()->json([
+                'message' => 'El evento no está disponible'
+            ], 400);
+        }
+
+        // Crear ticket y reducir stock
+        $ticket = null;
+
+        DB::transaction(function () use ($request, $ticketType, &$ticket) {
+            $method = $request->payment_method ?? 'qr';
+            $status = ($method === 'efectivo') ? 'pending' : 'paid';
+
+            $ticket = Ticket::create([
+                'user_id'        => $request->user()->id,
+                'event_id'       => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'status'         => $status,
+            ]);
+
+            // Registrar el pago
+            Payment::create([
+                'ticket_id'      => $ticket->id,
+                'amount'         => $ticketType->price,
+                'payment_method' => $method,
+                'status'         => ($status === 'paid') ? 'completed' : 'pending',
+            ]);
+
+            $ticketType->decrement('stock');
+            $ticketType->event->decrement('tickets_available');
+        });
+
+        return response()->json([
+            'message' => 'Ticket comprado correctamente',
+            'ticket'  => $ticket ? $ticket->load(['event', 'ticketType']) : null,
+        ], 201);
+    }
 
     // MIS TICKETS
     public function myTickets(Request $request)

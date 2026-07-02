@@ -127,4 +127,30 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Contraseña actualizada correctamente']);
     }
+
+    // RECUPERAR CONTRASEÑA SIN TOKEN (PÚBLICO)
+    public function resetPasswordWithoutToken(Request $request)
+    {
+        $request->validate([
+            'email'        => 'required|email|exists:users,email',
+            'phone'        => 'required|string',
+            'new_password' => 'required|string|min:6',
+        ]);
+
+        $user = User::where('email', $request->email)
+                    ->where('phone', $request->phone)
+                    ->first();
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'El número de celular no coincide con el correo registrado.'
+            ], 422);
+        }
+
+        $user->update(['password' => Hash::make($request->new_password)]);
+
+        return response()->json([
+            'message' => 'Contraseña restablecida correctamente. Ya puedes iniciar sesión.'
+        ]);
+    }
 }

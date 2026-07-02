@@ -62,11 +62,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
       if (response['token'] != null) {
         await ApiService.saveToken(response['token']);
-        final prefs = await SharedPreferences.getInstance();
-        final user = response['user'];
-        await prefs.setString('user_name', user['name'] ?? '');
-        await prefs.setString('user_email', user['email'] ?? '');
-        await prefs.setString('user_role', user['role']?['name'] ?? 'Cliente');
+        await ApiService.saveUserData(response['user'] as Map<String, dynamic>);
 
         if (mounted) {
           Navigator.pushReplacement(

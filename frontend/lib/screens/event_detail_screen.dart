@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../models/event_model.dart';
 import '../services/api_service.dart';
 import '../main.dart' show AppColors;
@@ -14,21 +15,31 @@ class EventDetailScreen extends StatefulWidget {
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isPurchasing = false;
 
-  Future<void> _purchaseTicket(int ticketTypeId) async {
+  Future<void> _purchaseTicket(int ticketTypeId, {String? promoCode, String? paymentMethod}) async {
     setState(() => _isPurchasing = true);
     try {
-      final response = await ApiService.purchaseTicket(ticketTypeId);
+      final response = await ApiService.purchaseTicket(
+        ticketTypeId,
+        promoCode: promoCode,
+        paymentMethod: paymentMethod,
+      );
       if (!mounted) return;
 
       if (response['ticket'] != null) {
+        final isPending = response['ticket']['status'] == 'pending';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Row(children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text('¡Compra exitosa! Tu ticket está listo.', style: TextStyle(fontWeight: FontWeight.bold)),
+            content: Row(children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                isPending
+                    ? '¡Reserva realizada! Paga en boletería física.'
+                    : '¡Compra exitosa! Tu ticket está listo.',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
             ]),
-            backgroundColor: AppColors.success,
+            backgroundColor: isPending ? AppColors.warning : AppColors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             margin: const EdgeInsets.all(16),
@@ -60,110 +71,364 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _showPurchaseDialog(Map<String, dynamic> ticketType) {
+    final promoCtrl = TextEditingController();
+    double discountPercentage = 0.0;
+    String promoMessage = '';
+    bool isPromoValid = false;
+    bool isValidatingPromo = false;
+    final basePrice = double.tryParse('${ticketType['price']}') ?? 0.0;
+
+    // Métodos de pago interactivos
+    String paymentMethod = 'qr'; // 'qr', 'banco', 'efectivo'
+    String uniquePaymentToken = 'PAGO-QR-${DateTime.now().millisecondsSinceEpoch}';
+
     showDialog(
       context: context,
-      builder: (_) => Dialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: AppColors.cardBorder),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Icon
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(Icons.shopping_cart_checkout_rounded, color: Colors.white, size: 30),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Confirmar Compra',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                widget.event.title,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.cardBorder),
-                ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final finalPrice = basePrice * (1.0 - (discountPercentage / 100.0));
+
+          return Dialog(
+            backgroundColor: AppColors.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+              side: BorderSide(color: AppColors.cardBorder),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _purchaseRow('Tipo', ticketType['name'] ?? '—'),
-                    const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(color: Color(0xFF2A2A45), height: 1)),
-                    _purchaseRow('Precio', 'Bs. ${(ticketType['price'] as num?)?.toStringAsFixed(2) ?? '0.00'}'),
-                    const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(color: Color(0xFF2A2A45), height: 1)),
-                    _purchaseRow('Disponibles', '${ticketType['stock'] ?? 0} unidades'),
+                    // Icono de cabecera
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(Icons.shopping_cart_checkout_rounded, color: Colors.white, size: 26),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Confirmar Compra',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.event.title,
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Detalles de compra
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.cardBorder),
+                      ),
+                      child: Column(
+                        children: [
+                          _purchaseRow('Tipo', ticketType['name'] ?? '—'),
+                          const SizedBox(height: 6),
+                          _purchaseRow('Precio Base', 'Bs. ${basePrice.toStringAsFixed(2)}'),
+                          if (isPromoValid) ...[
+                            const SizedBox(height: 6),
+                            _purchaseRow('Descuento', '-${discountPercentage.toStringAsFixed(0)}%'),
+                          ],
+                          const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Divider(color: Color(0xFF2A2A45), height: 1)),
+                          _purchaseRow('Total a Pagar', 'Bs. ${finalPrice.toStringAsFixed(2)}', isTotal: true),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Campo de Cupón
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: promoCtrl,
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                            decoration: InputDecoration(
+                              hintText: 'Código promocional',
+                              hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                              filled: true,
+                              fillColor: AppColors.surface,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: AppColors.cardBorder),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppColors.cardBorder)),
+                              focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: AppColors.primary)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        ElevatedButton(
+                          onPressed: isValidatingPromo
+                              ? null
+                              : () async {
+                                  final code = promoCtrl.text.trim();
+                                  if (code.isEmpty) return;
+                                  setDialogState(() => isValidatingPromo = true);
+                                  try {
+                                    final res = await ApiService.validatePromoCode(code);
+                                    setDialogState(() {
+                                      if (res['valid'] == true) {
+                                        isPromoValid = true;
+                                        discountPercentage = double.tryParse('${res['discount_percentage']}') ?? 0.0;
+                                        promoMessage = res['message'] ?? 'Código aplicado';
+                                      } else {
+                                        isPromoValid = false;
+                                        discountPercentage = 0.0;
+                                        promoMessage = res['message'] ?? 'Código no válido';
+                                      }
+                                    });
+                                  } catch (e) {
+                                    setDialogState(() {
+                                      isPromoValid = false;
+                                      discountPercentage = 0.0;
+                                      promoMessage = 'Código incorrecto';
+                                    });
+                                  } finally {
+                                    setDialogState(() => isValidatingPromo = false);
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          ),
+                          child: isValidatingPromo
+                              ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 1.5))
+                              : const Text('Aplicar', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                    if (promoMessage.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        promoMessage,
+                        style: TextStyle(
+                          color: isPromoValid ? AppColors.success : AppColors.error,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+
+                    // Selección de Método de Pago
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Método de Pago',
+                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _payMethodBtn('Pago QR', 'qr', paymentMethod, () {
+                          setDialogState(() {
+                            paymentMethod = 'qr';
+                          });
+                        }),
+                        const SizedBox(width: 6),
+                        _payMethodBtn('Banco', 'banco', paymentMethod, () {
+                          setDialogState(() {
+                            paymentMethod = 'banco';
+                          });
+                        }),
+                        const SizedBox(width: 6),
+                        _payMethodBtn('Efectivo', 'efectivo', paymentMethod, () {
+                          setDialogState(() {
+                            paymentMethod = 'efectivo';
+                          });
+                        }),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Área dinámica de información del pago
+                    if (paymentMethod == 'qr') ...[
+                      const Text(
+                        'Escanea este código QR desde tu app bancaria:',
+                        style: TextStyle(color: AppColors.primaryLight, fontSize: 11),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: QrImageView(
+                          data: 'Bs.${finalPrice.toStringAsFixed(2)} - $uniquePaymentToken',
+                          version: QrVersions.auto,
+                          size: 140,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        uniquePaymentToken,
+                        style: const TextStyle(color: Colors.grey, fontSize: 10, fontFamily: 'monospace'),
+                      ),
+                    ] else if (paymentMethod == 'banco') ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.cardBorder),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Transferencia Bancaria:', style: TextStyle(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.bold)),
+                            SizedBox(height: 4),
+                            Text('Banco: Banco Unión S.A.', style: TextStyle(color: Colors.white, fontSize: 11)),
+                            Text('Cuenta: 100000348271', style: TextStyle(color: Colors.white, fontSize: 11)),
+                            Text('Titular: Gobernación de Potosí', style: TextStyle(color: Colors.white, fontSize: 11)),
+                            SizedBox(height: 4),
+                            Text('Envía tu comprobante al ingresar al evento.', style: TextStyle(color: Colors.grey, fontSize: 10, fontStyle: FontStyle.italic)),
+                          ],
+                        ),
+                      ),
+                    ] else if (paymentMethod == 'efectivo') ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.cardBorder),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded, color: AppColors.success, size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Deberás pagar en efectivo en boletería el día del evento. Tu ticket se guardará como Pendiente.',
+                                style: TextStyle(color: Colors.white, fontSize: 11),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: AppColors.cardBorder),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: Text('Cancelar', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _purchaseTicket(
+                                  ticketType['id'],
+                                  promoCode: isPromoValid ? promoCtrl.text.trim() : null,
+                                  paymentMethod: paymentMethod,
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              child: const Text('¡Comprar!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: AppColors.cardBorder),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                      ),
-                      child: Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _purchaseTicket(ticketType['id']);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                        ),
-                        child: const Text('¡Comprar!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ),
-                ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _payMethodBtn(String label, String code, String current, VoidCallback onTap) {
+    final isSel = code == current;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSel ? AppColors.primary : AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isSel ? AppColors.primaryLight : AppColors.cardBorder),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSel ? Colors.white : AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _purchaseRow(String key, String value) {
+  Widget _purchaseRow(String key, String value, {bool isTotal = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(key, style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+        Text(key,
+            style: TextStyle(
+                color: isTotal ? Colors.white : AppColors.textMuted,
+                fontSize: isTotal ? 14 : 13,
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.normal)),
+        Text(value,
+            style: TextStyle(
+                color: isTotal ? AppColors.primaryLight : Colors.white,
+                fontSize: isTotal ? 16 : 13,
+                fontWeight: FontWeight.bold)),
       ],
     );
   }
@@ -477,8 +742,13 @@ class _TicketTypeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = ticketType['name'] ?? 'General';
-    final price = (ticketType['price'] as num?)?.toStringAsFixed(2) ?? '0.00';
-    final stock = ticketType['stock'] ?? 0;
+    final double priceVal = ticketType['price'] is num
+        ? (ticketType['price'] as num).toDouble()
+        : double.tryParse(ticketType['price']?.toString() ?? '') ?? 0.0;
+    final price = priceVal.toStringAsFixed(2);
+    final int stock = ticketType['stock'] is int
+        ? ticketType['stock'] as int
+        : int.tryParse(ticketType['stock']?.toString() ?? '') ?? 0;
     final hasStock = stock > 0;
 
     return Container(

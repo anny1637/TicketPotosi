@@ -8,6 +8,8 @@ import 'my_tickets_screen.dart';
 import 'scanner_screen.dart';
 import 'profile_screen.dart';
 import 'admin_panel_screen.dart';
+import 'admin/create_event_screen.dart';
+import 'chatbot_screen.dart';
 import '../main.dart' show AppColors;
 
 class HomeScreen extends StatefulWidget {
@@ -17,23 +19,23 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> {
   List<EventModel> _events = [];
-  bool _isLoading    = true;
-  bool _hasError     = false;
-  String _userName   = '';
-  String _userRole   = '';
-  bool   _isAdmin    = false;
-  int    _currentIndex = 0;
-  int    _selectedCategory = 0;
+  bool _isLoading = true;
+  bool _hasError = false;
+  String _userName = '';
+  String _userRole = '';
+  bool _isAdmin = false;
+  int _currentIndex = 0;
+  int _selectedCategory = 0;
 
   final List<Map<String, dynamic>> _categories = [
-    {'label': 'Todos',       'icon': Icons.apps_rounded},
-    {'label': 'Conciertos',  'icon': Icons.music_note_rounded},
-    {'label': 'Deportes',    'icon': Icons.sports_soccer_rounded},
-    {'label': 'Teatro',      'icon': Icons.theater_comedy_rounded},
-    {'label': 'Festivales',  'icon': Icons.celebration_rounded},
-    {'label': 'Cultura',     'icon': Icons.account_balance_rounded},
+    {'label': 'Todos', 'icon': Icons.apps_rounded},
+    {'label': 'Conciertos', 'icon': Icons.music_note_rounded},
+    {'label': 'Deportes', 'icon': Icons.sports_soccer_rounded},
+    {'label': 'Teatro', 'icon': Icons.theater_comedy_rounded},
+    {'label': 'Festivales', 'icon': Icons.celebration_rounded},
+    {'label': 'Cultura', 'icon': Icons.account_balance_rounded},
   ];
 
   @override
@@ -46,9 +48,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        _userName  = prefs.getString('user_name')  ?? 'Usuario';
-        _userRole  = prefs.getString('user_role')  ?? 'Cliente';
-        _isAdmin   = (prefs.getInt('user_role_id') ?? 2) == 1;
+        _userName = prefs.getString('user_name') ?? 'Usuario';
+        _userRole = prefs.getString('user_role') ?? 'Cliente';
+        _isAdmin = (prefs.getInt('user_role_id') ?? 2) == 1;
       });
     }
     await _loadEvents();
@@ -60,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final data = await ApiService.getEvents();
       if (mounted) {
         setState(() {
-          _events    = data.map((e) => EventModel.fromJson(e)).toList();
+          _events = data.map((e) => EventModel.fromJson(e)).toList();
           _isLoading = false;
         });
       }
@@ -76,10 +78,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return _events.where((e) {
       final combined = '${e.title} ${e.description} ${e.category ?? ''}'.toLowerCase();
       if (cat == 'conciertos') return combined.contains('concierto') || combined.contains('música') || combined.contains('musica') || combined.contains('show') || combined.contains('banda');
-      if (cat == 'deportes')   return combined.contains('deporte') || combined.contains('fútbol') || combined.contains('futbol') || combined.contains('torneo');
-      if (cat == 'teatro')     return combined.contains('teatro') || combined.contains('obra') || combined.contains('drama');
+      if (cat == 'deportes') return combined.contains('deporte') || combined.contains('fútbol') || combined.contains('futbol') || combined.contains('torneo');
+      if (cat == 'teatro') return combined.contains('teatro') || combined.contains('obra') || combined.contains('drama');
       if (cat == 'festivales') return combined.contains('festival') || combined.contains('feria');
-      if (cat == 'cultura')    return combined.contains('cultura') || combined.contains('arte') || combined.contains('museo');
+      if (cat == 'cultura') return combined.contains('cultura') || combined.contains('arte') || combined.contains('museo');
       return true;
     }).toList();
   }
@@ -127,92 +129,245 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _showNotifications() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: AppColors.cardBorder),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.notifications_active_rounded, color: AppColors.primary, size: 22),
+            SizedBox(width: 8),
+            Text('Notificaciones', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              _buildNotificationItem(
+                '🎟️ ¡Preventa Disponible!',
+                'La preventa para el concierto del año ya está activa con 20% de descuento.',
+                'Hace 10 min',
+              ),
+              const Divider(color: Color(0xFF2A2A45), height: 16),
+              _buildNotificationItem(
+                '⚡ Nuevo Evento Creado',
+                'Se ha publicado el Torneo Nacional de Fútbol en el Estadio Potosí.',
+                'Hace 2 horas',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationItem(String title, String desc, String time) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(desc, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(time, style: TextStyle(color: AppColors.textMuted, fontSize: 10)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
+      drawer: _buildDrawer(),
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          _buildHome(),
-          const MyTicketsScreen(),
-          if (_isAdmin) const ScannerScreen(),
-          const ProfileScreen(),
+          _buildHomeBody(),
+          MyTicketsScreen(key: _currentIndex == 1 ? UniqueKey() : null),
+          if (_isAdmin) ScannerScreen(key: _currentIndex == 2 ? UniqueKey() : null),
+          ProfileScreen(key: _currentIndex == (_isAdmin ? 3 : 2) ? UniqueKey() : null),
         ],
       ),
+      floatingActionButton: _currentIndex == 0
+          ? FloatingActionButton(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatbotScreen())),
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: const Icon(Icons.psychology_rounded, color: Colors.white, size: 28),
+            )
+          : null,
       bottomNavigationBar: _buildBottomNav(),
     );
   }
 
-  Widget _buildBottomNav() {
-    final items = <Map<String, dynamic>>[
-      {'active': Icons.explore_rounded, 'inactive': Icons.explore_outlined, 'label': 'Explorar'},
-      {'active': Icons.confirmation_number_rounded, 'inactive': Icons.confirmation_number_outlined, 'label': 'Mis Tickets'},
-      if (_isAdmin)
-        {'active': Icons.qr_code_scanner_rounded, 'inactive': Icons.qr_code_outlined, 'label': 'Scanner'},
-      {'active': Icons.person_rounded, 'inactive': Icons.person_outline_rounded, 'label': 'Perfil'},
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.cardBorder, width: 0.5)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, -4)),
-        ],
-      ),
+  Widget _buildDrawer() {
+    return Drawer(
+      backgroundColor: AppColors.surface,
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: items.asMap().entries.map((entry) {
-              final i         = entry.key;
-              final item      = entry.value;
-              final isSelected = _currentIndex == i;
-
-              return GestureDetector(
-                onTap: () => setState(() => _currentIndex = i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primary.withOpacity(0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isSelected
-                            ? item['active'] as IconData
-                            : item['inactive'] as IconData,
-                        color: isSelected ? AppColors.primary : AppColors.textMuted,
-                        size: 24,
+        child: Column(
+          children: [
+            // Drawer Header
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.cardBorder)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
+                        style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item['label'] as String,
-                        style: TextStyle(
-                          color: isSelected ? AppColors.primary : AppColors.textMuted,
-                          fontSize: 10,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _userName,
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
+                        Text(
+                          _userRole,
+                          style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
+                ],
+              ),
+            ),
+
+            // Items del Drawer
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                children: [
+                  // Categorías de Eventos
+                  const Padding(
+                    padding: EdgeInsets.only(left: 12, bottom: 8),
+                    child: Text('CATEGORÍAS', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  ),
+                  ..._categories.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final cat = entry.value;
+                    return ListTile(
+                      leading: Icon(cat['icon'] as IconData, color: _selectedCategory == i ? AppColors.primary : AppColors.textSecondary, size: 20),
+                      title: Text(cat['label'] as String, style: TextStyle(color: _selectedCategory == i ? Colors.white : AppColors.textSecondary, fontSize: 14, fontWeight: _selectedCategory == i ? FontWeight.bold : FontWeight.normal)),
+                      onTap: () {
+                        setState(() {
+                          _selectedCategory = i;
+                          _currentIndex = 0; // Cambiar a pestaña explorar
+                        });
+                        Navigator.pop(context);
+                      },
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      selected: _selectedCategory == i,
+                      selectedTileColor: AppColors.primary.withOpacity(0.1),
+                    );
+                  }),
+
+                  const Padding(
+                    padding: EdgeInsets.only(left: 12, top: 20, bottom: 8),
+                    child: Text('ACCIONES', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  ),
+
+                  // Si es Admin, mostrar Panel Admin y Agregar Evento
+                  if (_isAdmin) ...[
+                    ListTile(
+                      leading: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.warning, size: 20),
+                      title: const Text('Panel Admin', style: TextStyle(color: Colors.white, fontSize: 14)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen()));
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primaryLight, size: 20),
+                      title: const Text('Escanear QR', style: TextStyle(color: Colors.white, fontSize: 14)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        setState(() => _currentIndex = 2); // Ir a pestaña scanner
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.success, size: 20),
+                      title: const Text('Agregar Evento', style: TextStyle(color: Colors.white, fontSize: 14)),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateEventScreen()));
+                        if (res == true) _loadEvents();
+                      },
+                    ),
+                  ],
+
+                  ListTile(
+                    leading: const Icon(Icons.person_rounded, color: AppColors.primaryLight, size: 20),
+                    title: const Text('Mi Perfil', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      setState(() => _currentIndex = _isAdmin ? 3 : 2); // Ir a pestaña perfil
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.psychology_rounded, color: AppColors.primary, size: 20),
+                    title: const Text('Asistente IA', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatbotScreen()));
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: AppColors.cardBorder)),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.logout_rounded, color: AppColors.error, size: 20),
+                title: const Text('Cerrar Sesión', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold, fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _logout();
+                },
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildHome() {
+  Widget _buildHomeBody() {
     return NestedScrollView(
       headerSliverBuilder: (context, innerScrolled) => [
         SliverAppBar(
@@ -220,152 +375,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           floating: true,
           snap: true,
           elevation: 0,
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(0.5),
-            child: Divider(height: 0.5, color: AppColors.cardBorder),
-          ),
-          title: GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+          leading: Builder(
+            builder: (ctx) => IconButton(
+              icon: const Icon(Icons.menu_rounded, color: Colors.white),
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
             ),
-            child: Row(
-              children: [
-                // Avatar clickeable → va al perfil
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary, AppColors.primaryLight],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.4),
-                        blurRadius: 10,
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Hola, ${_userName.split(' ').first} 👋',
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      _userRole,
-                      style: const TextStyle(
-                          color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ],
+          ),
+          title: const Text(
+            'TicketPotosí',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
             ),
           ),
           actions: [
-            // Botón Admin Panel
-            if (_isAdmin)
-              IconButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AdminPanelScreen()),
-                ),
-                icon: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.warning, Color(0xFFFF8F00)],
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.admin_panel_settings_rounded,
-                      color: Colors.white, size: 16),
-                ),
-                tooltip: 'Panel Admin',
-              ),
+            // Botón de notificaciones en el AppBar
             IconButton(
-              onPressed: _loadEvents,
-              icon: const Icon(Icons.refresh_rounded,
-                  color: AppColors.textSecondary, size: 22),
-              tooltip: 'Actualizar',
+              icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+              onPressed: _showNotifications,
             ),
-            // Logout en appbar
-            IconButton(
-              onPressed: _logout,
-              icon: const Icon(Icons.logout_rounded,
-                  color: AppColors.textSecondary, size: 22),
-              tooltip: 'Salir',
-            ),
+            const SizedBox(width: 8),
           ],
         ),
       ],
-      body: Column(
-        children: [
-          // Categorías
-          Container(
-            height: 54,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _categories.length,
-              itemBuilder: (context, i) {
-                final isSelected = _selectedCategory == i;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedCategory = i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : AppColors.card,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected ? AppColors.primary : AppColors.cardBorder,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _categories[i]['icon'] as IconData,
-                          size: 14,
-                          color: isSelected ? Colors.white : AppColors.textMuted,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          _categories[i]['label'] as String,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : AppColors.textSecondary,
-                            fontSize: 13,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Lista de eventos
-          Expanded(child: _buildEventsList()),
-        ],
-      ),
+      body: _buildEventsList(),
     );
   }
 
@@ -447,6 +482,74 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
   }
+
+  Widget _buildBottomNav() {
+    final items = <Map<String, dynamic>>[
+      {'active': Icons.explore_rounded, 'inactive': Icons.explore_outlined, 'label': 'Explorar'},
+      {'active': Icons.confirmation_number_rounded, 'inactive': Icons.confirmation_number_outlined, 'label': 'Mis Tickets'},
+      if (_isAdmin)
+        {'active': Icons.qr_code_scanner_rounded, 'inactive': Icons.qr_code_outlined, 'label': 'Scanner'},
+      {'active': Icons.person_rounded, 'inactive': Icons.person_outline_rounded, 'label': 'Perfil'},
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.cardBorder, width: 0.5)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, -4)),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: items.asMap().entries.map((entry) {
+              final i = entry.key;
+              final item = entry.value;
+              final isSelected = _currentIndex == i;
+
+              return GestureDetector(
+                onTap: () => setState(() => _currentIndex = i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.primary.withOpacity(0.15)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isSelected
+                            ? item['active'] as IconData
+                            : item['inactive'] as IconData,
+                        color: isSelected ? AppColors.primary : AppColors.textMuted,
+                        size: 24,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item['label'] as String,
+                        style: TextStyle(
+                          color: isSelected ? AppColors.primary : AppColors.textMuted,
+                          fontSize: 10,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Event Card ───────────────────────────────────────────────────────────────
@@ -485,7 +588,6 @@ class _EventCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Título + badge preventa
                     Row(
                       children: [
                         Expanded(
@@ -516,8 +618,6 @@ class _EventCard extends StatelessWidget {
                           ),
                       ],
                     ),
-
-                    // Organizador
                     if (event.organizer != null && event.organizer!.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Row(
@@ -539,13 +639,11 @@ class _EventCard extends StatelessWidget {
                         ],
                       ),
                     ],
-
                     const SizedBox(height: 10),
                     _infoChip(Icons.location_on_rounded, event.location),
                     const SizedBox(height: 6),
                     _infoChip(Icons.access_time_rounded, event.eventDate),
                     const SizedBox(height: 12),
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -608,7 +706,7 @@ class _EventCard extends StatelessWidget {
             future: ApiService.getBaseUrl(),
             builder: (context, snap) {
               if (!snap.hasData) return _gradientHeader();
-              final baseUrl  = snap.data!.replaceAll('/api', '');
+              final baseUrl = snap.data!.replaceAll('/api', '');
               final imageUrl = '$baseUrl/storage/${event.image}';
               return Image.network(
                 imageUrl,
@@ -623,7 +721,6 @@ class _EventCard extends StatelessWidget {
           )
         else
           _gradientHeader(),
-
         Container(
           height: 170,
           decoration: BoxDecoration(
@@ -634,7 +731,6 @@ class _EventCard extends StatelessWidget {
             ),
           ),
         ),
-
         Positioned(
           top: 12,
           right: 12,

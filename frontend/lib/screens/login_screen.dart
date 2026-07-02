@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../screens/home_screen.dart';
 import '../screens/register_screen.dart';
-import '../main.dart' show AppColors;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,27 +10,32 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _loginController    = TextEditingController(); // email o teléfono
+  final _loginController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading       = false;
+  bool _isLoading = false;
   bool _obscurePassword = true;
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
+
+  // Paleta de Colores Lavanda Pastel (Claymorphism/Neumorphic)
+  static const Color brandBg = Color(0xFFF3E8FF); // Fondo lavanda claro
+  static const Color cardBg = Colors.white;
+  static const Color primaryPurple = Color(0xFF9F78FF);
+  static const Color primaryLight = Color(0xFFC7B0FF);
+  static const Color textDark = Color(0xFF4A3E65);
+  static const Color textMuted = Color(0xFF9E92B4);
+  static const Color inputBg = Color(0xFFF8F6FC);
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1000),
     );
-    _fadeAnim  = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
   }
 
@@ -76,110 +80,238 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } catch (e) {
       debugPrint('Error login: $e');
-      final url = await ApiService.getBaseUrl();
       _showMessage(
-        'No se pudo conectar.\nURL: $url\nVerifica que el servidor esté corriendo.',
+        'No se pudo conectar al servidor. Inténtalo de nuevo.',
         isError: true,
-        duration: 5,
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showMessage(String msg, {bool isError = false, int duration = 3}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(fontSize: 13)),
-        backgroundColor: isError ? AppColors.error : AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: duration),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
+  void _showForgotPasswordDialog() {
+    final emailCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
+    bool isResetting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Column(
+            children: [
+              Icon(Icons.lock_reset_rounded, color: primaryPurple, size: 40),
+              SizedBox(height: 8),
+              Text(
+                'Restablecer Contraseña',
+                style: TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Ingresa tu correo y celular registrados para cambiar tu contraseña de inmediato.',
+                  style: TextStyle(color: textMuted, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                _dialogField(emailCtrl, 'Correo Electrónico', Icons.email_rounded),
+                const SizedBox(height: 10),
+                _dialogField(phoneCtrl, 'Número de Celular', Icons.phone_rounded, keyboardType: TextInputType.phone),
+                const SizedBox(height: 10),
+                _dialogField(passCtrl, 'Nueva Contraseña', Icons.lock_open_rounded, obscure: true),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar', style: TextStyle(color: textMuted)),
+            ),
+            ElevatedButton(
+              onPressed: isResetting
+                  ? null
+                  : () async {
+                      final email = emailCtrl.text.trim();
+                      final phone = phoneCtrl.text.trim();
+                      final newPass = passCtrl.text;
+
+                      if (email.isEmpty || phone.isEmpty || newPass.isEmpty) {
+                        _showMessage('Por favor completa todos los campos', isError: true);
+                        return;
+                      }
+                      if (newPass.length < 6) {
+                        _showMessage('La contraseña debe tener mínimo 6 caracteres', isError: true);
+                        return;
+                      }
+
+                      setDialogState(() => isResetting = true);
+                      try {
+                        final res = await ApiService.forgotPassword(email, phone, newPass);
+                        Navigator.pop(ctx);
+                        _showMessage(res['message'] ?? 'Contraseña restablecida correctamente.');
+                      } catch (e) {
+                        _showMessage('Error al restablecer. Verifica tus datos de registro.', isError: true);
+                      } finally {
+                        setDialogState(() => isResetting = false);
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryPurple,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: isResetting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Restablecer', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  void _showServerConfig() {
-    final urlController = TextEditingController();
-    ApiService.getBaseUrl().then((url) => urlController.text = url);
+  Widget _dialogField(TextEditingController ctrl, String label, IconData icon,
+      {bool obscure = false, TextInputType? keyboardType}) {
+    return TextField(
+      controller: ctrl,
+      obscureText: obscure,
+      keyboardType: keyboardType,
+      style: const TextStyle(color: textDark, fontSize: 13),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: textMuted, fontSize: 12),
+        prefixIcon: Icon(icon, color: primaryPurple, size: 16),
+        filled: true,
+        fillColor: inputBg,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      ),
+    );
+  }
 
+  void _showServerConfigDialog() async {
+    final currentUrl = await ApiService.getBaseUrl();
+    final urlCtrl = TextEditingController(text: currentUrl);
+    bool isScanning = false;
+
+    if (!mounted) return;
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.settings_rounded, color: AppColors.primary, size: 20),
-            SizedBox(width: 8),
-            Text('Configurar Servidor', style: TextStyle(color: Colors.white, fontSize: 16)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'URL del servidor API:',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: urlController,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'http://192.168.0.9:8000/api',
-                hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                filled: true,
-                fillColor: AppColors.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: AppColors.cardBorder),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Column(
+            children: [
+              Icon(Icons.wifi_rounded, color: primaryPurple, size: 36),
+              SizedBox(height: 8),
+              Text(
+                'Conexión de Servidor',
+                style: TextStyle(color: textDark, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Introduce la IP local o busca automáticamente el servidor en tu red WiFi.',
+                style: TextStyle(color: textMuted, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: urlCtrl,
+                style: const TextStyle(color: textDark, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'URL de API del Servidor',
+                  labelStyle: const TextStyle(color: textMuted, fontSize: 12),
+                  prefixIcon: const Icon(Icons.link_rounded, color: primaryPurple, size: 16),
+                  filled: true,
+                  fillColor: inputBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 ),
               ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: isScanning
+                    ? null
+                    : () async {
+                        setDialogState(() => isScanning = true);
+                        final newUrl = await ApiService.scanAndSaveServerIp();
+                        setDialogState(() {
+                          isScanning = false;
+                          if (newUrl != null) {
+                            urlCtrl.text = newUrl;
+                            _showMessage('¡Servidor encontrado e inalámbricamente vinculado!');
+                          } else {
+                            _showMessage('No se detectó el servidor. Verifica que corra en el puerto 8000.', isError: true);
+                          }
+                        });
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryPurple.withOpacity(0.1),
+                  foregroundColor: primaryPurple,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+                icon: isScanning
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: primaryPurple, strokeWidth: 2))
+                    : const Icon(Icons.wifi_find_rounded, size: 18),
+                label: const Text('Autodetectar Servidor 🔍', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar', style: TextStyle(color: textMuted)),
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+            ElevatedButton(
+              onPressed: () async {
+                final url = urlCtrl.text.trim();
+                if (url.isNotEmpty) {
+                  await ApiService.setBaseUrl(url);
+                  Navigator.pop(ctx);
+                  _showMessage('URL del servidor guardada correctamente.');
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryPurple,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('💡 URLs según contexto:', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('• Celular WiFi: http://192.168.0.9:8000/api', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                  Text('• Emulador: http://10.0.2.2:8000/api', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                  Text('• PC local: http://127.0.0.1:8000/api', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                ],
-              ),
+              child: const Text('Guardar', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancelar', style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await ApiService.setBaseUrl(urlController.text);
-              if (mounted) {
-                Navigator.pop(context);
-                _showMessage('URL guardada correctamente');
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Guardar', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      ),
+    );
+  }
+
+  void _showMessage(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: TextStyle(color: isError ? Colors.white : textDark, fontSize: 13, fontWeight: FontWeight.w600)),
+        backgroundColor: isError ? const Color(0xFFF48FB1) : const Color(0xFFC8E6C9),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
@@ -187,276 +319,366 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1A0A3D), AppColors.bg, Color(0xFF0D0D1A)],
-          ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: SlideTransition(
-              position: _slideAnim,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 48),
+      backgroundColor: brandBg,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            FadeTransition(
+              opacity: _fadeAnim,
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                  const SizedBox(height: 20),
+                  // Bienvenido texto en español
+                  const Text(
+                    '¡Bienvenido!',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      color: textDark,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Inicia sesión para continuar con tu viaje',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
 
-                    // Logo
-                    Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppColors.primary, AppColors.primaryLight],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                  // Ilustración 3D de avatar/corazón estilo arcilla
+                  _buildClayIllustration(),
+                  const SizedBox(height: 24),
+
+                  // Tarjeta de login con bordes muy redondeados
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(32),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFD6C8EC).withOpacity(0.4),
+                          blurRadius: 24,
+                          offset: const Offset(0, 12),
                         ),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withOpacity(0.5),
-                            blurRadius: 30,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.confirmation_number_rounded,
-                        size: 48,
-                        color: Colors.white,
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: 24),
-
-                    const Text(
-                      'TicketPotosí',
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Inicia sesión en tu cuenta',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-
-                    // Formulario
-                    Form(
+                    child: Form(
                       key: _formKey,
                       child: Column(
                         children: [
-                          // Email o Teléfono
-                          _buildField(
+                          // Input Email/User
+                          _buildInput(
                             controller: _loginController,
-                            label: 'Email o Número de celular',
+                            hint: 'Correo o Número de celular',
                             icon: Icons.person_rounded,
-                            hint: 'admin@ticketpotosi.com o 70123456',
-                            keyboardType: TextInputType.emailAddress,
-                            validator: (v) {
-                              if (v == null || v.isEmpty) return 'Ingresa tu email o celular';
-                              return null;
-                            },
+                            validator: (v) => (v == null || v.isEmpty) ? 'Ingresa tu correo o celular' : null,
                           ),
                           const SizedBox(height: 16),
 
-                          // Contraseña
-                          _buildField(
+                          // Input Password
+                          _buildInput(
                             controller: _passwordController,
-                            label: 'Contraseña',
+                            hint: 'Contraseña',
                             icon: Icons.lock_rounded,
-                            hint: '••••••••',
-                            obscureText: _obscurePassword,
-                            suffixIcon: IconButton(
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            obscure: _obscurePassword,
+                            suffix: IconButton(
                               icon: Icon(
                                 _obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-                                color: AppColors.textMuted,
+                                color: textMuted,
                                 size: 20,
                               ),
+                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                             ),
-                            validator: (v) {
-                              if (v == null || v.isEmpty) return 'Ingresa tu contraseña';
-                              if (v.length < 6) return 'Mínimo 6 caracteres';
-                              return null;
-                            },
+                            validator: (v) => (v == null || v.isEmpty) ? 'Ingresa tu contraseña' : null,
                           ),
-                          const SizedBox(height: 32),
 
-                          // Botón login
-                          SizedBox(
-                            width: double.infinity,
-                            height: 54,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _login,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                elevation: 8,
-                                shadowColor: AppColors.primary.withOpacity(0.5),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
+                          // Olvidó contraseña (FUNCIONAL)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _showForgotPasswordDialog,
+                              child: const Text(
+                                '¿Olvidaste tu contraseña?',
+                                style: TextStyle(
+                                  color: primaryPurple,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2.5,
-                                      ),
-                                    )
-                                  : const Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.login_rounded, size: 20),
-                                        SizedBox(width: 8),
-                                        Text('Ingresar',
-                                            style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold)),
-                                      ],
-                                    ),
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 8),
 
-                          // Info admin
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.primary.withOpacity(0.2)),
-                            ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(Icons.admin_panel_settings_rounded,
-                                        color: AppColors.primary, size: 16),
-                                    const SizedBox(width: 6),
-                                    Text('Credenciales de Admin:',
+                          // Botón Login redondeado 3D
+                          GestureDetector(
+                            onTap: _isLoading ? null : _login,
+                            child: Container(
+                              height: 56,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [primaryPurple, Color(0xFFB18FFF)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryPurple.withOpacity(0.4),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Ingresar',
                                         style: TextStyle(
-                                            color: AppColors.primary,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '📧 admin@ticketpotosi.com\n🔑 admin123',
-                                  style: TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 12,
-                                      height: 1.6),
-                                ),
-                              ],
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 20),
 
-                          // Registrarse
+                          // Línea decorativa "o continuar con"
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: textMuted.withOpacity(0.3))),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10),
+                                child: Text('o continuar con', style: TextStyle(color: textMuted, fontSize: 11)),
+                              ),
+                              Expanded(child: Divider(color: textMuted.withOpacity(0.3))),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Iconos de redes sociales (Google, Facebook y TikTok)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text('¿No tienes cuenta?',
+                              _buildSocialIcon(
+                                child: const Text(
+                                  'G',
                                   style: TextStyle(
-                                      color: AppColors.textSecondary, fontSize: 14)),
-                              TextButton(
-                                onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => const RegisterScreen()),
+                                    color: Color(0xFFDB4437),
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    fontFamily: 'sans-serif',
+                                  ),
                                 ),
-                                child: const Text('Regístrate',
-                                    style: TextStyle(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14)),
+                              ),
+                              const SizedBox(width: 20),
+                              _buildSocialIcon(
+                                child: const Icon(
+                                  Icons.facebook,
+                                  color: Color(0xFF1877F2),
+                                  size: 26,
+                                ),
+                              ),
+                              const SizedBox(width: 20),
+                              _buildSocialIcon(
+                                child: const Icon(
+                                  Icons.music_note_rounded,
+                                  color: Color(0xFF010101),
+                                  size: 24,
+                                ),
                               ),
                             ],
                           ),
+                          const SizedBox(height: 20),
 
-                          // Config servidor
-                          TextButton.icon(
-                            onPressed: _showServerConfig,
-                            icon: const Icon(Icons.settings_rounded,
-                                size: 16, color: AppColors.textMuted),
-                            label: Text('Configurar servidor',
-                                style: TextStyle(
-                                    color: AppColors.textMuted, fontSize: 12)),
+                          // Registro
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                "¿No tienes una cuenta? ",
+                                style: TextStyle(color: textMuted, fontSize: 13),
+                              ),
+                              GestureDetector(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                                ),
+                                child: const Text(
+                                  'Regístrate',
+                                  style: TextStyle(
+                                    color: primaryPurple,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 24),
                         ],
                       ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: 40),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.settings_suggest_rounded, color: primaryPurple, size: 28),
+                tooltip: 'Configurar Servidor',
+                onPressed: _showServerConfigDialog,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildField({
+  Widget _buildSocialIcon({required Widget child}) {
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFFE1D5F5)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFD6C8EC).withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Center(
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildInput({
     required TextEditingController controller,
-    required String label,
-    required IconData icon,
     required String hint,
-    bool obscureText = false,
-    TextInputType? keyboardType,
-    Widget? suffixIcon,
+    required IconData icon,
+    bool obscure = false,
+    Widget? suffix,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white, fontSize: 15),
+      obscureText: obscure,
       validator: validator,
+      style: const TextStyle(color: textDark, fontSize: 14, fontWeight: FontWeight.w600),
       decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         hintText: hint,
-        hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
-        prefixIcon: Icon(icon, color: AppColors.primary, size: 20),
-        suffixIcon: suffixIcon,
+        hintStyle: const TextStyle(color: textMuted, fontSize: 13),
+        prefixIcon: Container(
+          margin: const EdgeInsets.only(right: 12, left: 8),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEDE7F6),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: primaryPurple, size: 20),
+        ),
+        suffixIcon: suffix,
         filled: true,
-        fillColor: AppColors.card,
+        fillColor: inputBg,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppColors.cardBorder),
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppColors.cardBorder),
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(color: primaryLight, width: 1.5),
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.error),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       ),
+    );
+  }
+
+  Widget _buildClayIllustration() {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFD6C8EC).withOpacity(0.5),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          width: 100,
+          height: 100,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: [primaryPurple, primaryLight],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.confirmation_number_rounded,
+              color: Colors.white,
+              size: 44,
+            ),
+          ),
+        ),
+        Positioned(
+          top: 0,
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xFFFF8A80),
+            ),
+            child: const Icon(
+              Icons.favorite_rounded,
+              color: Colors.white,
+              size: 12,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
