@@ -95,7 +95,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: AppColors.bg,
         elevation: 0,
         title: const Text('Gestión de Eventos',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -106,7 +106,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
         actions: [
           IconButton(
             onPressed: _loadEvents,
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
           ),
         ],
       ),
@@ -118,7 +118,8 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
           );
           if (result == true) _loadEvents();
         },
-        backgroundColor: AppColors.primary,
+        backgroundColor: const Color(0xFF0294E3),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: const Text('Nuevo Evento',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -162,6 +163,8 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
         ? types.map((t) => double.tryParse('${t['price']}') ?? 0).reduce((a, b) => a < b ? a : b)
         : 0.0;
 
+    final isActive = event['status'] != 'inactive' && event['status'] != 'Inactivo';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
@@ -180,11 +183,11 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.15),
+                    color: const Color(0xFF0294E3).withOpacity(0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.event_rounded,
-                      color: AppColors.primary, size: 26),
+                  child: const Icon(Icons.calendar_today_rounded,
+                      color: Color(0xFF0294E3), size: 24),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -194,17 +197,31 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                       Text(event['title'] ?? '',
                           style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 15,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 2),
-                      Text(event['organizer'] ?? '',
-                          style: TextStyle(
-                              color: AppColors.primary, fontSize: 12)),
-                      Text(_formatStatus(event['status']),
-                          style: TextStyle(
-                              color: AppColors.textSecondary, fontSize: 11)),
+                      const SizedBox(height: 3),
+                      Text(event['organizer'] ?? 'Gobernación de Potosí',
+                          style: const TextStyle(
+                              color: Color(0xFF0294E3), fontSize: 13, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: isActive ? const Color(0xFF00E676) : Colors.amber,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(isActive ? 'Activo' : 'Inactivo',
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.6), fontSize: 11)),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -214,29 +231,30 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
 
           // Info row
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Row(
               children: [
                 Icon(Icons.location_on_rounded,
-                    size: 13, color: AppColors.textMuted),
-                const SizedBox(width: 4),
+                    size: 14, color: Colors.white.withOpacity(0.4)),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(event['location'] ?? '',
                       style: TextStyle(
-                          color: AppColors.textSecondary, fontSize: 12),
+                          color: Colors.white.withOpacity(0.6), fontSize: 13),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(6),
+                    color: const Color(0xFF00E676).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF00E676).withOpacity(0.4), width: 1),
                   ),
                   child: Text(
                     'Bs. ${minPrice.toStringAsFixed(2)}+',
                     style: const TextStyle(
-                        color: AppColors.success,
+                        color: Color(0xFF00E676),
                         fontSize: 12,
                         fontWeight: FontWeight.bold),
                   ),
@@ -264,9 +282,9 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                       if (result == true) _loadEvents();
                     },
                     icon: const Icon(Icons.edit_rounded,
-                        size: 16, color: AppColors.primary),
+                        size: 16, color: Color(0xFF0294E3)),
                     label: const Text('Editar',
-                        style: TextStyle(color: AppColors.primary, fontSize: 13)),
+                        style: TextStyle(color: Color(0xFF0294E3), fontSize: 13, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 Container(width: 1, height: 40, color: AppColors.cardBorder),
@@ -275,9 +293,9 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                     onPressed: () =>
                         _deleteEvent(event['id'], event['title'] ?? ''),
                     icon: const Icon(Icons.delete_rounded,
-                        size: 16, color: AppColors.error),
+                        size: 16, color: Color(0xFFE57373)),
                     label: const Text('Eliminar',
-                        style: TextStyle(color: AppColors.error, fontSize: 13)),
+                        style: TextStyle(color: Color(0xFFE57373), fontSize: 13, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],

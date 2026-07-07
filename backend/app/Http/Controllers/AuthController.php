@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Storage;
 
 class AuthController extends Controller
 {
@@ -98,10 +99,20 @@ class AuthController extends Controller
         $request->validate([
             'name'  => 'sometimes|string|max:255',
             'phone' => 'sometimes|string|max:20',
+            'photo' => 'nullable|file|image|max:5120',
         ]);
 
         $user = $request->user();
-        $user->update($request->only(['name', 'phone']));
+        $data = $request->only(['name', 'phone']);
+
+        if ($request->hasFile('photo')) {
+            if ($user->photo) {
+                Storage::disk('public')->delete($user->photo);
+            }
+            $data['photo'] = $request->file('photo')->store('users/photos', 'public');
+        }
+
+        $user->update($data);
 
         return response()->json([
             'message' => 'Perfil actualizado',

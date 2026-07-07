@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,13 +17,13 @@ void main() async {
 }
 
 class AppColors {
-  static const primary = Color(0xFF7C4DFF);
-  static const primaryLight = Color(0xFFAB82FF);
-  static const primaryDark = Color(0xFF512DA8);
-  static const bg = Color(0xFF0D0D1A);
-  static const surface = Color(0xFF161628);
-  static const card = Color(0xFF1E1E35);
-  static const cardBorder = Color(0xFF2A2A45);
+  static const primary = Color(0xFF0294E3);
+  static const primaryLight = Color(0xFF40C4FF);
+  static const primaryDark = Color(0xFF01579B);
+  static const bg = Color(0xFF080D1A);
+  static const surface = Color(0xFF0F172A);
+  static const card = Color(0xFF132038);
+  static const cardBorder = Color(0xFF1E2E4E);
   static const textPrimary = Colors.white;
   static const textSecondary = Color(0xFFB0B0CC);
   static const textMuted = Color(0xFF6A6A8A);
@@ -50,6 +51,9 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'sans-serif',
       ),
+      builder: (context, child) {
+        return child!;
+      },
       home: const SplashScreen(),
     );
   }
@@ -124,7 +128,7 @@ class _SplashScreenState extends State<SplashScreen>
           gradient: RadialGradient(
             center: Alignment.topRight,
             radius: 1.8,
-            colors: [Color(0xFF1A0A3D), AppColors.bg],
+            colors: [Color(0xFF0C1D3A), AppColors.bg],
           ),
         ),
         child: Stack(
@@ -181,7 +185,7 @@ class _SplashScreenState extends State<SplashScreen>
                                 borderRadius: BorderRadius.circular(30),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.primary.withOpacity(0.5),
+                                    color: AppColors.primary.withOpacity(0.4),
                                     blurRadius: 40,
                                     spreadRadius: 4,
                                     offset: const Offset(0, 10),
@@ -207,7 +211,7 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Tu plataforma de eventos',
+                            'Tu plataforma premium de eventos',
                             style: TextStyle(
                               fontSize: 16,
                               color: AppColors.textSecondary,
@@ -216,14 +220,16 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                           const SizedBox(height: 80),
                           SizedBox(
-                            width: 36,
-                            height: 36,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                AppColors.primary.withOpacity(0.8),
+                            width: 180,
+                            height: 6,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(3),
+                              child: LinearProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppColors.primary,
+                                ),
+                                backgroundColor: Colors.white.withOpacity(0.1),
                               ),
-                              backgroundColor: Colors.white.withOpacity(0.1),
                             ),
                           ),
                         ],

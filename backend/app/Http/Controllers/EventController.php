@@ -5,8 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Event;
 use App\Models\TicketType;
 use App\Models\Presale;
+use App\Models\Ticket;
+use App\Models\Payment;
+use App\Models\Attendance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class EventController extends Controller
 {
@@ -187,8 +191,55 @@ class EventController extends Controller
 
         $event->update($data);
 
+        // Actualizar tipos de ticket
+        if ($request->has('ticket_types') && is_array($request->ticket_types)) {
+            $keepIds = [];
+            foreach ($request->ticket_types as $ttData) {
+                if (is_string($ttData)) {
+                    $ttData = json_decode($ttData, true);
+                }
+                if (!$ttData || !isset($ttData['name'])) continue;
+                
+                $tt = TicketType::updateOrCreate(
+                    [
+                        'event_id' => $event->id,
+                        'name'     => $ttData['name'],
+                    ],
+                    [
+                        'price'    => $ttData['price'] ?? 0,
+                        'stock'    => $ttData['stock'] ?? 100,
+                    ]
+                );
+                $keepIds[] = $tt->id;
+            }
+            
+            // Eliminar tipos de entrada obsoletos (que no tengan ventas asociadas)
+            $typesToDelete = TicketType::where('event_id', $event->id)->whereNotIn('id', $keepIds)->get();
+            foreach ($typesToDelete as $typeToDelete) {
+                $hasTickets = Ticket::where('ticket_type_id', $typeToDelete->id)->exists();
+                if (!$hasTickets) {
+                    $typeToDelete->delete();
+                }
+            }
+        }
+
+        // Actualizar preventa
+        if ($request->filled('presale_start') && $request->filled('presale_end') && $request->filled('presale_price')) {
+            Presale::updateOrCreate(
+                ['event_id' => $event->id],
+                [
+                    'start_date'    => $request->presale_start,
+                    'end_date'      => $request->presale_end,
+                    'presale_price' => $request->presale_price,
+                    'is_active'     => true,
+                ]
+            );
+        } else if ($request->has('presale_price') && empty($request->presale_price)) {
+            Presale::where('event_id', $event->id)->delete();
+        }
+
         return response()->json([
-            'message' => 'Evento actualizado',
+            'message' => 'Evento actualizado correctamente',
             'event'   => $event->load(['ticketTypes', 'presale']),
         ]);
     }
@@ -204,9 +255,26 @@ class EventController extends Controller
         if ($event->image) Storage::disk('public')->delete($event->image);
         if ($event->video) Storage::disk('public')->delete($event->video);
 
-        $event->delete();
+        DB::transaction(function () use ($event) {
+            // Eliminar pagos y asistencias asociadas a los tickets de este evento
+            $ticketIds = Ticket::where('event_id', $event->id)->pluck('id');
+            Payment::whereIn('ticket_id', $ticketIds)->delete();
+            Attendance::whereIn('ticket_id', $ticketIds)->delete();
+            
+            // Eliminar tickets
+            Ticket::where('event_id', $event->id)->delete();
+            
+            // Eliminar tipos de ticket
+            TicketType::where('event_id', $event->id)->delete();
+            
+            // Eliminar preventas
+            Presale::where('event_id', $event->id)->delete();
+            
+            // Eliminar evento
+            $event->delete();
+        });
 
-        return response()->json(['message' => 'Evento eliminado correctamente']);
+        return response()->json(['message' => 'Evento y todos sus registros asociados eliminados correctamente']);
     }
 
     // Validar que el usuario es admin

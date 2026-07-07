@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
@@ -16,6 +19,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _email = '';
   String _phone = '';
   String _role  = '';
+  String _photo = '';
+  File?  _photoFile;
   bool   _isLoading = false;
 
   final _nameCtrl    = TextEditingController();
@@ -45,8 +50,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _email = prefs.getString('user_email') ?? '';
       _phone = prefs.getString('user_phone') ?? '';
       _role  = prefs.getString('user_role')  ?? 'Cliente';
+      _photo = prefs.getString('user_photo') ?? '';
       _nameCtrl.text  = _name;
       _phoneCtrl.text = _phone;
+      _photoFile = null;
     });
   }
 
@@ -58,7 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
     try {
       final res = await ApiService.updateProfile(
-          _nameCtrl.text.trim(), _phoneCtrl.text.trim());
+          _nameCtrl.text.trim(), _phoneCtrl.text.trim(), photoFile: _photoFile);
       if (res['user'] != null) {
         await ApiService.saveUserData(res['user'] as Map<String, dynamic>);
         await _loadProfile();
@@ -67,6 +74,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _showMessage(res['message'] ?? 'Error al actualizar', isError: true);
       }
     } catch (e) {
+      debugPrint('Error actualizando perfil: $e');
       _showMessage('Error de conexión', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -190,111 +198,196 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  // Avatar
-                  _buildAvatar(),
-                  const SizedBox(height: 28),
-
-                  // Datos del perfil
-                  _buildSection(
-                    title: '👤 Datos personales',
+          : Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 650),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
                     children: [
-                      _buildTextField(
-                        controller: _nameCtrl,
-                        label: 'Nombre completo',
-                        icon: Icons.person_rounded,
+                      // Avatar
+                      _buildAvatar(),
+                      const SizedBox(height: 28),
+
+                      // Datos del perfil
+                      _buildSection(
+                        title: '👤 Datos personales',
+                        children: [
+                          _buildTextField(
+                            controller: _nameCtrl,
+                            label: 'Nombre completo',
+                            icon: Icons.person_rounded,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            controller: _phoneCtrl,
+                            label: 'Número de celular',
+                            icon: Icons.phone_rounded,
+                            keyboardType: TextInputType.phone,
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _saveProfile,
+                              icon: const Icon(Icons.save_rounded, size: 18),
+                              label: const Text('Guardar cambios'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      _buildTextField(
-                        controller: _phoneCtrl,
-                        label: 'Número de celular',
-                        icon: Icons.phone_rounded,
-                        keyboardType: TextInputType.phone,
+                      const SizedBox(height: 20),
+
+                      // Cambiar contraseña
+                      _buildSection(
+                        title: '🔒 Seguridad',
+                        children: [
+                          _buildTextField(
+                            controller: _currPassCtrl,
+                            label: 'Contraseña actual',
+                            icon: Icons.lock_outline_rounded,
+                            obscureText: true,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            controller: _newPassCtrl,
+                            label: 'Nueva contraseña',
+                            icon: Icons.lock_rounded,
+                            obscureText: true,
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _changePassword,
+                              icon: const Icon(Icons.key_rounded, size: 18),
+                              label: const Text('Cambiar contraseña'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.warning,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
+
+                      // Cerrar sesión
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _saveProfile,
-                          icon: const Icon(Icons.save_rounded, size: 18),
-                          label: const Text('Guardar cambios'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
+                        child: OutlinedButton.icon(
+                          onPressed: _logout,
+                          icon: const Icon(Icons.logout_rounded,
+                              color: AppColors.error, size: 20),
+                          label: const Text('Cerrar sesión',
+                              style: TextStyle(
+                                  color: AppColors.error,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.error),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                borderRadius: BorderRadius.circular(14)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
                         ),
                       ),
+                      const SizedBox(height: 32),
                     ],
                   ),
-                  const SizedBox(height: 20),
-
-                  // Cambiar contraseña
-                  _buildSection(
-                    title: '🔒 Cambiar contraseña',
-                    children: [
-                      _buildTextField(
-                        controller: _currPassCtrl,
-                        label: 'Contraseña actual',
-                        icon: Icons.lock_rounded,
-                        obscureText: true,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildTextField(
-                        controller: _newPassCtrl,
-                        label: 'Nueva contraseña',
-                        icon: Icons.lock_open_rounded,
-                        obscureText: true,
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _changePassword,
-                          icon: const Icon(Icons.key_rounded, size: 18),
-                          label: const Text('Cambiar contraseña'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.warning,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Cerrar sesión
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _logout,
-                      icon: const Icon(Icons.logout_rounded,
-                          color: AppColors.error, size: 20),
-                      label: const Text('Cerrar sesión',
-                          style: TextStyle(
-                              color: AppColors.error,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.error),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
+                ),
               ),
             ),
+    );
+  }
+
+  Future<void> _pickProfilePhoto() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (picked != null) {
+      setState(() {
+        _photoFile = File(picked.path);
+      });
+    }
+  }
+
+  Widget _buildAvatarImage() {
+    if (kIsWeb) {
+      if (_photoFile != null) {
+        return Image.network(_photoFile!.path, fit: BoxFit.cover);
+      }
+      if (_photo.isNotEmpty) {
+        return Image.network(
+          _photo == 'local_mock_photo.png'
+              ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80'
+              : _photo,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildInitials(),
+        );
+      }
+      return _buildInitials();
+    }
+
+    if (_photoFile != null) {
+      return Image.file(_photoFile!, fit: BoxFit.cover);
+    }
+    
+    if (_photo.isNotEmpty) {
+      final file = File(_photo);
+      if (file.existsSync()) {
+        return Image.file(file, fit: BoxFit.cover);
+      }
+      return FutureBuilder<String>(
+        future: ApiService.getBaseUrl(),
+        builder: (context, snap) {
+          if (!snap.hasData) return _buildInitials();
+          final baseUrl = snap.data!.replaceAll('/api', '');
+          final fullUrl = _photo == 'local_mock_photo.png'
+              ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80'
+              : '$baseUrl/storage/$_photo';
+          return Image.network(
+            fullUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildInitials(),
+          );
+        },
+      );
+    }
+
+    return _buildInitials();
+  }
+
+  Widget _buildInitials() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryLight],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          _name.isNotEmpty ? _name[0].toUpperCase() : 'U',
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 40,
+              fontWeight: FontWeight.bold),
+        ),
+      ),
     );
   }
 
@@ -303,31 +396,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Stack(
           children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryLight],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+            GestureDetector(
+              onTap: _pickProfilePhoto,
+              child: Container(
+                width: 110,
+                height: 110,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(36),
+                  border: Border.all(color: AppColors.primary, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.25),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.4),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                  ),
-                ],
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(34),
+                  child: _buildAvatarImage(),
+                ),
               ),
-              child: Center(
-                child: Text(
-                  _name.isNotEmpty ? _name[0].toUpperCase() : 'U',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 40,
-                      fontWeight: FontWeight.bold),
+            ),
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: GestureDetector(
+                onTap: _pickProfilePhoto,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                    ],
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
                 ),
               ),
             ),

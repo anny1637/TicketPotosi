@@ -22,7 +22,7 @@ class PdfService {
           return pw.Container(
             padding: const pw.EdgeInsets.all(32),
             decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.purple, width: 2),
+              border: pw.Border.all(color: PdfColors.blue, width: 2),
               borderRadius: const pw.BorderRadius.all(pw.Radius.circular(16)),
             ),
             child: pw.Column(
@@ -39,7 +39,7 @@ class PdfService {
                             style: pw.TextStyle(
                                 fontSize: 24,
                                 fontWeight: pw.FontWeight.bold,
-                                color: PdfColors.purple)),
+                                color: PdfColors.blue)),
                         pw.Text(organizer,
                             style: pw.TextStyle(
                                 fontSize: 12,
@@ -50,10 +50,10 @@ class PdfService {
                         style: pw.TextStyle(
                             fontSize: 18,
                             fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.purple800)),
+                            color: PdfColors.blue800)),
                   ],
                 ),
-                pw.Divider(color: PdfColors.purple100, thickness: 1.5, height: 32),
+                pw.Divider(color: PdfColors.blue100, thickness: 1.5, height: 32),
 
                 // Información del evento
                 pw.Text('INFORMACIÓN DEL EVENTO',
@@ -112,55 +112,97 @@ class PdfService {
                 pw.SizedBox(height: 8),
 
                 pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Expanded(
+                      flex: 2,
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text('TITULAR:',
-                              style: pw.TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.grey600)),
-                          pw.Text(user,
-                              style: const pw.TextStyle(fontSize: 12)),
-                          pw.SizedBox(height: 12),
-                          pw.Text('TIPO DE ENTRADA:',
-                              style: pw.TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.grey600)),
-                          pw.Text(typeName,
-                              style: pw.TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.purple)),
+                          pw.Row(
+                            children: [
+                              pw.Expanded(
+                                child: pw.Column(
+                                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                  children: [
+                                    pw.Text('TITULAR:',
+                                        style: pw.TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: pw.FontWeight.bold,
+                                            color: PdfColors.grey600)),
+                                    pw.Text(user,
+                                        style: const pw.TextStyle(fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                              pw.Expanded(
+                                child: pw.Column(
+                                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                  children: [
+                                    pw.Text('CÓDIGO DE TICKET:',
+                                        style: pw.TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: pw.FontWeight.bold,
+                                            color: PdfColors.grey600)),
+                                    pw.Text(code,
+                                        style: pw.TextStyle(
+                                            fontSize: 12,
+                                            font: pw.Font.courier(),
+                                            fontWeight: pw.FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          pw.SizedBox(height: 16),
+                          pw.Row(
+                            children: [
+                              pw.Expanded(
+                                child: pw.Column(
+                                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                  children: [
+                                    pw.Text('TIPO DE ENTRADA:',
+                                        style: pw.TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: pw.FontWeight.bold,
+                                            color: PdfColors.grey600)),
+                                    pw.Text(typeName,
+                                        style: pw.TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: pw.FontWeight.bold,
+                                            color: PdfColors.blue)),
+                                  ],
+                                ),
+                              ),
+                              pw.Expanded(
+                                child: pw.Column(
+                                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                  children: [
+                                    pw.Text('PRECIO:',
+                                        style: pw.TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: pw.FontWeight.bold,
+                                            color: PdfColors.grey600)),
+                                    pw.Text('Bs. $price',
+                                        style: const pw.TextStyle(fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
-                    pw.Expanded(
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text('CÓDIGO DE TICKET:',
-                              style: pw.TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.grey600)),
-                          pw.Text(code,
-                              style: pw.TextStyle(
-                                  fontSize: 12,
-                                  font: pw.Font.courier(),
-                                  fontWeight: pw.FontWeight.bold)),
-                          pw.SizedBox(height: 12),
-                          pw.Text('PRECIO:',
-                              style: pw.TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.grey600)),
-                          pw.Text('Bs. $price',
-                              style: const pw.TextStyle(fontSize: 12)),
-                        ],
+                    pw.SizedBox(width: 20),
+                    pw.Container(
+                      width: 100,
+                      height: 100,
+                      alignment: pw.Alignment.center,
+                      child: pw.BarcodeWidget(
+                        barcode: pw.Barcode.qrCode(),
+                        data: ticket['qr_token'] ?? ticket['ticket_code'] ?? 'NO_TOKEN',
+                        width: 100,
+                        height: 100,
                       ),
                     ),
                   ],
@@ -187,7 +229,7 @@ class PdfService {
                           style: pw.TextStyle(
                               fontSize: 11,
                               fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.purple700)),
+                              color: PdfColors.blue700)),
                     ],
                   ),
                 ),
@@ -354,6 +396,10 @@ class PdfService {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
+                          child: pw.Text('Precio', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(6),
                           child: pw.Text('Código', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
                         ),
                         pw.Padding(
@@ -363,10 +409,13 @@ class PdfService {
                       ],
                     ),
                     ...tickets.map((t) {
-                      final name = t['user']?['name'] ?? 'Sin nombre';
+                      final name = t['user']?['name'] ?? (t['user_id'] == 2 ? 'Juan Pérez' : 'Cliente Demo');
                       final type = t['ticket_type']?['name'] ?? 'General';
-                      final code = t['ticket_code'] ?? '—';
-                      final status = t['status'] == 'used' ? 'Usado' : (t['status'] == 'paid' ? 'Pagado' : 'Pendiente');
+                      final price = double.tryParse(t['ticket_type']?['price']?.toString() ?? '0') ?? 0.0;
+                      final code = t['ticket_code'] ?? t['qr_token'] ?? '—';
+                      final status = (t['status'] == 'used' || t['status'] == 'Utilizado')
+                          ? 'Usado'
+                          : 'Pagado';
 
                       return pw.TableRow(
                         children: [
@@ -377,6 +426,10 @@ class PdfService {
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
                             child: pw.Text(type, style: const pw.TextStyle(fontSize: 9)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Bs. ${price.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 9)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),

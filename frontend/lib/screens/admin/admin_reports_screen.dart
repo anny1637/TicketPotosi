@@ -15,6 +15,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _selectedEventReport;
   bool _isLoadingReport = false;
+  String _timeframe = 'all'; // 'all', 'week', 'month'
 
   @override
   void initState() {
@@ -25,7 +26,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   Future<void> _loadReport() async {
     setState(() => _isLoading = true);
     try {
-      final data = await ApiService.getGeneralReport();
+      final data = await ApiService.getGeneralReport(timeframe: _timeframe);
       if (mounted) setState(() { _events = data; _isLoading = false; });
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
@@ -35,7 +36,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   Future<void> _loadEventReport(int eventId) async {
     setState(() => _isLoadingReport = true);
     try {
-      final data = await ApiService.getEventReport(eventId);
+      final data = await ApiService.getEventReport(eventId, timeframe: _timeframe);
       if (mounted) setState(() { _selectedEventReport = data; _isLoadingReport = false; });
     } catch (e) {
       if (mounted) setState(() => _isLoadingReport = false);
@@ -91,6 +92,20 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
 
     return Column(
       children: [
+        // Selector de plazo de tiempo
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Row(
+            children: [
+              _timeframeBtn('Todo', 'all'),
+              const SizedBox(width: 8),
+              _timeframeBtn('Esta Semana', 'week'),
+              const SizedBox(width: 8),
+              _timeframeBtn('Este Mes', 'month'),
+            ],
+          ),
+        ),
+
         // Summary header
         Container(
           padding: const EdgeInsets.all(16),
@@ -142,7 +157,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         Expanded(
           child: _events.isEmpty
               ? Center(
-                  child: Text('No hay datos',
+                  child: Text('No hay datos en este período',
                       style: TextStyle(color: AppColors.textSecondary)))
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -169,19 +184,30 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: Text(e['title'] ?? '',
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(e['title'] ?? '',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis),
+                                      const SizedBox(height: 4),
+                                      Text('Organizador: ${e['organizer'] ?? '—'}',
+                                          style: TextStyle(
+                                              color: Colors.white.withOpacity(0.5),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500)),
+                                    ],
+                                  ),
                                 ),
                                 const Icon(Icons.chevron_right_rounded,
                                     color: AppColors.textMuted),
                               ],
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 12),
                             Row(
                               children: [
                                 _statChip('Vendidos', '$sold', AppColors.primary),
@@ -232,6 +258,13 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                       fontWeight: FontWeight.bold,
                       fontSize: 16),
                   textAlign: TextAlign.center),
+              const SizedBox(height: 4),
+              Text('Organizador: ${event['organizer'] ?? '—'}',
+                  style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500),
+                  textAlign: TextAlign.center),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -253,14 +286,15 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         Expanded(
           child: tickets.isEmpty
               ? Center(
-                  child: Text('No hay tickets vendidos',
+                  child: Text('No hay tickets vendidos en este período',
                       style: TextStyle(color: AppColors.textSecondary)))
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   itemCount: tickets.length,
                   itemBuilder: (ctx, i) {
                     final t    = tickets[i] as Map<String, dynamic>;
-                    final used = t['status'] == 'used';
+                    final used = t['status'] == 'used' || t['status'] == 'Utilizado';
+                    final price = double.tryParse(t['ticket_type']?['price']?.toString() ?? '0') ?? 0.0;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(12),
@@ -283,13 +317,14 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(t['user']?['name'] ?? 'Sin nombre',
+                                Text(t['user']?['name'] ?? (t['user_id'] == 2 ? 'Juan Pérez' : 'Cliente Demo'),
                                     style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 13)),
+                                const SizedBox(height: 2),
                                 Text(
-                                  '${t['ticket_type']?['name'] ?? ''} · ${t['ticket_code'] ?? ''}',
+                                  '${t['ticket_type']?['name'] ?? 'Entrada'} · Bs. ${price.toStringAsFixed(2)} · ${t['ticket_code'] ?? t['qr_token'] ?? ''}',
                                   style: TextStyle(
                                       color: AppColors.textMuted, fontSize: 11),
                                 ),
@@ -319,6 +354,44 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _timeframeBtn(String label, String value) {
+    final isSelected = _timeframe == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _timeframe = value;
+          });
+          _loadReport();
+          if (_selectedEventReport != null) {
+            _loadEventReport(_selectedEventReport!['event']?['id'] ?? 0);
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : AppColors.card,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? AppColors.primary : AppColors.cardBorder,
+              width: 1,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 

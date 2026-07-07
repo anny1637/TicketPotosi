@@ -1,7 +1,7 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
 import '../main.dart' show AppColors;
@@ -17,17 +17,28 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
   List<dynamic> _tickets = [];
   bool _isLoading = true;
   bool _hasError = false;
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
-    _loadTickets();
+    _loadRole();
+  }
+
+  Future<void> _loadRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    final roleId = prefs.getInt('user_role_id') ?? 2;
+    setState(() => _isAdmin = roleId == 1);
+    await _loadTickets();
   }
 
   Future<void> _loadTickets() async {
     setState(() { _isLoading = true; _hasError = false; });
     try {
-      final data = await ApiService.getMyTickets();
+      // Admin ve todos los tickets; cliente solo los suyos
+      final data = _isAdmin
+          ? await ApiService.getAllTickets()
+          : await ApiService.getMyTickets();
       setState(() {
         _tickets = data;
         _isLoading = false;
@@ -66,6 +77,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
     }
   }
 
+  // --- Mostrar QR al cliente (su entrada) ---
   void _showQR(dynamic ticket) {
     final qrData = ticket['qr_token'] ?? ticket['ticket_code'] ?? 'NO_TOKEN';
     final code = ticket['ticket_code'] ?? '—';
@@ -84,20 +96,16 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Drag handle
             Container(
-              width: 40,
-              height: 4,
+              width: 40, height: 4,
               decoration: BoxDecoration(
                 color: AppColors.cardBorder,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Código QR',
-              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-            ),
+            const Text('Tu Código QR de Entrada',
+                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             Text(
               ticket['event']?['title'] ?? '—',
@@ -105,8 +113,6 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-
-            // QR code
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -129,8 +135,6 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
-            // Ticket code
             GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: code));
@@ -159,11 +163,8 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                     Text(
                       code,
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'monospace',
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
+                        color: Colors.white, fontFamily: 'monospace',
+                        fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 2,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -173,8 +174,6 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Status badge
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -187,10 +186,8 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                 children: [
                   Icon(_statusIcon(status), color: _statusColor(status), size: 16),
                   const SizedBox(width: 6),
-                  Text(
-                    _statusText(status),
-                    style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
+                  Text(_statusText(status),
+                      style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.bold, fontSize: 14)),
                 ],
               ),
             ),
@@ -205,8 +202,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                       icon: const Icon(Icons.print_rounded, size: 18),
                       label: const Text('Imprimir PDF', style: TextStyle(fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.primary, foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
@@ -234,36 +230,188 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
     );
   }
 
+  // --- Admin: ver detalles de ticket con opción de marcar como usado ---
+  void _showAdminTicketDetail(dynamic ticket) {
+    final qrData = ticket['qr_token'] ?? ticket['ticket_code'] ?? 'NO_TOKEN';
+    final code = ticket['ticket_code'] ?? '—';
+    final status = ticket['status'] ?? 'paid';
+    final buyerName = ticket['user_name'] ?? 'Cliente';
+    final eventTitle = ticket['event']?['title'] ?? '—';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: AppColors.cardBorder, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 20),
+            const Text('Detalle de Entrada',
+                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text(eventTitle,
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 14), textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            // Comprador
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.cardBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.person_rounded, color: AppColors.primary, size: 18),
+                      const SizedBox(width: 8),
+                      Text('Comprador: ',
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                      Text(buyerName,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.confirmation_number_outlined, color: AppColors.primaryLight, size: 18),
+                      const SizedBox(width: 8),
+                      Text('Código: ',
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                      Text(code,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold,
+                              fontFamily: 'monospace', fontSize: 13, letterSpacing: 1.5)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(_statusIcon(status), color: _statusColor(status), size: 18),
+                      const SizedBox(width: 8),
+                      Text('Estado: ',
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                      Text(_statusText(status),
+                          style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // QR del ticket
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(16),
+              ),
+              child: QrImageView(
+                data: qrData,
+                version: QrVersions.auto,
+                size: 160,
+                backgroundColor: Colors.white,
+                errorCorrectionLevel: QrErrorCorrectLevel.H,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Botón verificar entrada
+            if (status == 'paid')
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    // Validar QR como si lo escaneara
+                    final result = await ApiService.validateQR(qrData);
+                    if (!mounted) return;
+                    final isValid = result['valid'] == true;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(isValid ? '✅ Entrada VÁLIDA — Acceso permitido' : '❌ ${result['message']}'),
+                        backgroundColor: isValid ? AppColors.success : AppColors.error,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        margin: const EdgeInsets.all(16),
+                      ),
+                    );
+                    if (isValid) _loadTickets(); // refrescar
+                  },
+                  icon: const Icon(Icons.check_circle_rounded, size: 20),
+                  label: const Text('Verificar y Marcar como Usado', style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.success, foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: AppColors.cardBorder),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text('Cerrar', style: TextStyle(color: AppColors.textSecondary)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Mis Tickets',
-                    style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isAdmin ? 'Todas las Entradas' : 'Mis Tickets',
+                        style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
+                      ),
+                      Text(
+                        _isAdmin
+                            ? '${_tickets.length} entrada${_tickets.length != 1 ? 's' : ''} vendida${_tickets.length != 1 ? 's' : ''} en total'
+                            : '${_tickets.length} entrada${_tickets.length != 1 ? 's' : ''} registrada${_tickets.length != 1 ? 's' : ''}',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                      ),
+                    ],
                   ),
-                  Text(
-                    '${_tickets.length} entrada${_tickets.length != 1 ? 's' : ''} registrada${_tickets.length != 1 ? 's' : ''}',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 20),
+                // Content
+                Expanded(child: _buildContent()),
+              ],
             ),
-            const SizedBox(height: 20),
-
-            // Content
-            Expanded(child: _buildContent()),
-          ],
+          ),
         ),
       ),
     );
@@ -352,10 +500,11 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
           final ticket = _tickets[i];
           return _TicketCard(
             ticket: ticket,
+            isAdmin: _isAdmin,
             statusColor: _statusColor(ticket['status'] ?? 'pending'),
             statusIcon: _statusIcon(ticket['status'] ?? 'pending'),
             statusText: _statusText(ticket['status'] ?? 'pending'),
-            onTap: () => _showQR(ticket),
+            onTap: () => _isAdmin ? _showAdminTicketDetail(ticket) : _showQR(ticket),
           );
         },
       ),
@@ -366,6 +515,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
 // ─── Ticket Card with physical look ───────────────────────────────────────────
 class _TicketCard extends StatelessWidget {
   final dynamic ticket;
+  final bool isAdmin;
   final Color statusColor;
   final IconData statusIcon;
   final String statusText;
@@ -373,6 +523,7 @@ class _TicketCard extends StatelessWidget {
 
   const _TicketCard({
     required this.ticket,
+    required this.isAdmin,
     required this.statusColor,
     required this.statusIcon,
     required this.statusText,
@@ -480,7 +631,7 @@ class _TicketCard extends StatelessWidget {
                 ),
               ),
 
-              // Bottom section
+              // Bottom section: Código + acción
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
                 child: Row(
@@ -489,16 +640,24 @@ class _TicketCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Si admin, mostrar nombre del comprador
+                          if (isAdmin) ...[
+                            Text('Comprador', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                            const SizedBox(height: 2),
+                            Text(
+                              ticket['user_name'] ?? 'Cliente',
+                              style: const TextStyle(color: AppColors.primaryLight, fontSize: 13, fontWeight: FontWeight.bold),
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                          ],
                           Text('Código', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
                           const SizedBox(height: 4),
                           Text(
                             code,
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontFamily: 'monospace',
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
+                              color: Colors.white, fontFamily: 'monospace',
+                              fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5,
                             ),
                           ),
                         ],
@@ -516,17 +675,16 @@ class _TicketCard extends StatelessWidget {
                       child: Row(
                         children: [
                           Icon(
-                            Icons.qr_code_rounded,
+                            isAdmin ? Icons.verified_rounded : Icons.qr_code_rounded,
                             color: status == 'paid' ? Colors.white : AppColors.textMuted,
                             size: 18,
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Ver QR',
+                            isAdmin ? 'Verificar' : 'Ver QR',
                             style: TextStyle(
                               color: status == 'paid' ? Colors.white : AppColors.textMuted,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 13, fontWeight: FontWeight.bold,
                             ),
                           ),
                         ],

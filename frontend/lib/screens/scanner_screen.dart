@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../main.dart' show AppColors;
 
@@ -65,6 +66,52 @@ class _ScannerScreenState extends State<ScannerScreen>
     }
   }
 
+  Future<void> _scanFromGallery() async {
+    if (_isProcessing) return;
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      if (image == null) return;
+
+      setState(() => _isProcessing = true);
+      await _scannerCtrl.stop();
+
+      final BarcodeCapture? capture = await _scannerCtrl.analyzeImage(image.path);
+      if (capture != null && capture.barcodes.isNotEmpty) {
+        final String? qrToken = capture.barcodes.first.rawValue;
+        if (qrToken != null) {
+          final response = await ApiService.validateQR(qrToken);
+          if (mounted) {
+            setState(() => _result = response);
+            _showResultDialog(response);
+          }
+        } else {
+          _showError('No se encontró ningún código QR legible en la imagen.');
+        }
+      } else {
+        _showError('No se encontró ningún código QR en la imagen.');
+      }
+    } catch (e) {
+      _showError('Error al escanear la imagen: $e');
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.error,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+    _scannerCtrl.start();
+  }
+
   void _showResultDialog(Map<String, dynamic> result) {
     final isValid = result['valid'] == true;
     final ticket  = result['ticket'];
@@ -107,7 +154,9 @@ class _ScannerScreenState extends State<ScannerScreen>
               const SizedBox(height: 16),
 
               Text(
-                isValid ? '✅ TICKET VÁLIDO' : '❌ TICKET INVÁLIDO',
+                result['is_payment'] == true
+                    ? (isValid ? '✅ PAGO VÁLIDO' : '❌ PAGO INVÁLIDO')
+                    : (isValid ? '✅ TICKET VÁLIDO' : '❌ TICKET INVÁLIDO'),
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
@@ -125,8 +174,8 @@ class _ScannerScreenState extends State<ScannerScreen>
                 ),
               ),
 
-              // Detalles del ticket
-              if (ticket != null) ...[
+              // Detalles del ticket (ocultar si es pago)
+              if (ticket != null && result['is_payment'] != true) ...[
                 const SizedBox(height: 20),
                 Container(
                   padding: const EdgeInsets.all(14),
@@ -217,6 +266,11 @@ class _ScannerScreenState extends State<ScannerScreen>
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.image_rounded, color: Colors.white),
+            onPressed: _scanFromGallery,
+            tooltip: 'Cargar desde galería',
+          ),
           IconButton(
             icon: const Icon(Icons.flash_on_rounded, color: Colors.white),
             onPressed: () => _scannerCtrl.toggleTorch(),

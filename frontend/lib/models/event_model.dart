@@ -42,8 +42,20 @@ class EventModel {
     final types = (json['ticket_types'] as List?) ?? [];
     final hasPresale = types.any((t) => t['is_presale'] == true);
 
+    final int rawId = json['id'] is int
+        ? json['id'] as int
+        : (int.tryParse(json['id']?.toString() ?? '') ?? 0);
+
+    final int rawCapacity = json['capacity'] is int
+        ? json['capacity'] as int
+        : (int.tryParse(json['capacity']?.toString() ?? '') ?? 0);
+
+    final int rawTicketsAvailable = json['tickets_available'] is int
+        ? json['tickets_available'] as int
+        : (int.tryParse(json['tickets_available']?.toString() ?? '') ?? 0);
+
     return EventModel(
-      id:               json['id'] ?? 0,
+      id:               rawId,
       title:            json['title'] ?? '',
       description:      json['description'] ?? '',
       location:         json['location'] ?? '',
@@ -54,8 +66,8 @@ class EventModel {
       organizerLogo:    json['organizer_logo'],
       category:         json['category'],
       status:           json['status'] ?? 'active',
-      capacity:         json['capacity'] ?? 0,
-      ticketsAvailable: json['tickets_available'] ?? 0,
+      capacity:         rawCapacity,
+      ticketsAvailable: rawTicketsAvailable,
       ticketTypes:      types,
       artists:          (json['artists'] as List?) ?? [],
       presale:          json['presale'] as Map<String, dynamic>?,

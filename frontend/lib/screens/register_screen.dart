@@ -112,7 +112,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF120B2E), AppColors.bg],
+            colors: [Color(0xFF0C1D3A), AppColors.bg],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             stops: [0.0, 0.6],
@@ -147,139 +147,137 @@ class _RegisterScreenState extends State<RegisterScreen>
                     centerTitle: true,
                   ),
                   SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // Header
-                            Container(
-                              width: 70,
-                              height: 70,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [AppColors.primary, AppColors.primaryLight],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
+                    child: Center(
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 450),
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              // Header
+                              Container(
+                                width: 70,
+                                height: 70,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [AppColors.primary, AppColors.primaryLight],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary.withOpacity(0.4),
+                                      blurRadius: 24,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
                                 ),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.primary.withOpacity(0.4),
-                                    blurRadius: 24,
-                                    offset: const Offset(0, 6),
+                                child: const Icon(Icons.person_add_rounded, size: 36, color: Colors.white),
+                              ),
+                              const SizedBox(height: 20),
+                              const Text(
+                                'Regístrate gratis',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Únete y empieza a comprar tus entradas',
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                              ),
+                              const SizedBox(height: 28),
+
+                              _buildField(
+                                controller: _nameController,
+                                label: 'Nombre Completo',
+                                hint: 'Juan Pérez',
+                                icon: Icons.person_outline_rounded,
+                                validator: (v) => (v == null || v.isEmpty) ? 'Ingresa tu nombre' : null,
+                              ),
+                              const SizedBox(height: 14),
+
+                              _buildField(
+                                controller: _emailController,
+                                label: 'Correo Electrónico',
+                                hint: 'usuario@ticketpotosi.com',
+                                icon: Icons.email_outlined,
+                                validator: (v) {
+                                  if (v == null || v.isEmpty) return 'Ingresa tu correo';
+                                  if (!v.contains('@')) return 'Correo no válido';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 14),
+
+                              _buildField(
+                                controller: _phoneController,
+                                label: 'Teléfono (opcional)',
+                                hint: '+591 70000000',
+                                icon: Icons.phone_outlined,
+                                keyboardType: TextInputType.phone,
+                              ),
+                              const SizedBox(height: 14),
+
+                              _buildField(
+                                controller: _passwordController,
+                                label: 'Contraseña',
+                                hint: '••••••••',
+                                icon: Icons.lock_outline_rounded,
+                                obscure: _obscurePassword,
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                    color: AppColors.textMuted,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                ),
+                                validator: (v) {
+                                  if (v == null || v.isEmpty) return 'Ingresa una contraseña';
+                                  if (v.length < 6) return 'Mínimo 6 caracteres';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 32),
+
+                              _buildPrimaryButton(
+                                label: 'Crear mi cuenta',
+                                isLoading: _isLoading,
+                                onPressed: _register,
+                              ),
+                              const SizedBox(height: 28),
+
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    '¿Ya tienes cuenta? ',
+                                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () => Navigator.pop(context),
+                                    child: const Text(
+                                      'Inicia sesión',
+                                      style: TextStyle(
+                                        color: AppColors.primaryLight,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
-                              child: const Icon(Icons.person_add_rounded, size: 36, color: Colors.white),
-                            ),
-                            const SizedBox(height: 20),
-                            const Text(
-                              'Regístrate gratis',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Completa el formulario para comenzar',
-                              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                            ),
-                            const SizedBox(height: 32),
-
-                            _buildField(
-                              controller: _nameController,
-                              label: 'Nombre completo',
-                              hint: 'Juan Pérez',
-                              icon: Icons.person_outline_rounded,
-                              validator: (v) {
-                                if (v == null || v.isEmpty) return 'Ingresa tu nombre';
-                                if (v.length < 3) return 'Mínimo 3 caracteres';
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 14),
-
-                            _buildField(
-                              controller: _emailController,
-                              label: 'Correo electrónico',
-                              hint: 'correo@ejemplo.com',
-                              icon: Icons.email_outlined,
-                              keyboardType: TextInputType.emailAddress,
-                              validator: (v) {
-                                if (v == null || v.isEmpty) return 'Ingresa tu correo';
-                                if (!v.contains('@')) return 'Correo inválido';
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 14),
-
-                            _buildField(
-                              controller: _phoneController,
-                              label: 'Teléfono (opcional)',
-                              hint: '+591 70000000',
-                              icon: Icons.phone_outlined,
-                              keyboardType: TextInputType.phone,
-                            ),
-                            const SizedBox(height: 14),
-
-                            _buildField(
-                              controller: _passwordController,
-                              label: 'Contraseña',
-                              hint: '••••••••',
-                              icon: Icons.lock_outline_rounded,
-                              obscure: _obscurePassword,
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                  color: AppColors.textMuted,
-                                  size: 20,
-                                ),
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                              ),
-                              validator: (v) {
-                                if (v == null || v.isEmpty) return 'Ingresa una contraseña';
-                                if (v.length < 6) return 'Mínimo 6 caracteres';
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 32),
-
-                            _buildPrimaryButton(
-                              label: 'Crear mi cuenta',
-                              isLoading: _isLoading,
-                              onPressed: _register,
-                            ),
-                            const SizedBox(height: 28),
-
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '¿Ya tienes cuenta? ',
-                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                                ),
-                                GestureDetector(
-                                  onTap: () => Navigator.pop(context),
-                                  child: const Text(
-                                    'Inicia sesión',
-                                    style: TextStyle(
-                                      color: AppColors.primaryLight,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 24),
-                          ],
+                              const SizedBox(height: 24),
+                            ],
+                          ),
                         ),
                       ),
                     ),

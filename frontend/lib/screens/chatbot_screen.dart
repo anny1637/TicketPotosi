@@ -110,7 +110,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       }
       var resp = '🎪 ¡Claro! Estos son los eventos destacados ahora mismo en Potosí:\n\n';
       for (var e in _availableEvents) {
-        resp += '• *${e.title}*\n  📍 Lugar: ${e.location}\n  📅 Fecha: ${e.eventDate.replaceAll('T', ' ').substring(0, 16)}\n';
+        String rawDate = e.eventDate.replaceAll('T', ' ');
+        String displayDate = rawDate.length > 16 ? rawDate.substring(0, 16) : rawDate;
+        resp += '• *${e.title}*\n  📍 Lugar: ${e.location}\n  📅 Fecha: $displayDate\n';
         if (e.isPresale == true) {
           resp += '  🔥 ¡Tiene preventa disponible!\n';
         }
@@ -166,16 +168,16 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3E8FF), // Color lila suave del login
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         elevation: 0,
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withOpacity(0.15),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.psychology_rounded, color: AppColors.primary, size: 24),
@@ -186,18 +188,18 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               children: [
                 Text(
                   'Potosí AI',
-                  style: TextStyle(color: Color(0xFF4A3E65), fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 Text(
                   'Asistente Virtual 🤖',
-                  style: TextStyle(color: Color(0xFF9E92B4), fontSize: 11, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
                 ),
               ],
             ),
           ],
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF4A3E65), size: 18),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -249,16 +251,17 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
         decoration: BoxDecoration(
-          color: isUser ? AppColors.primary : Colors.white,
+          color: isUser ? AppColors.primary : AppColors.card,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
             bottomLeft: Radius.circular(isUser ? 20 : 4),
             bottomRight: Radius.circular(isUser ? 4 : 20),
           ),
+          border: isUser ? null : Border.all(color: AppColors.cardBorder, width: 1.0),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withOpacity(0.2),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -267,7 +270,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
         child: Text(
           text,
           style: TextStyle(
-            color: isUser ? Colors.white : const Color(0xFF4A3E65),
+            color: Colors.white,
             fontSize: 14,
             height: 1.4,
             fontWeight: isUser ? FontWeight.w500 : FontWeight.normal,
@@ -292,14 +295,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.card,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFE1D5F5)),
+                border: Border.all(color: AppColors.cardBorder),
               ),
               child: Center(
                 child: Text(
                   _suggestions[i],
-                  style: const TextStyle(color: Color(0xFF7E57C2), fontSize: 12, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -313,10 +316,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(0.2),
             blurRadius: 10,
             offset: const Offset(0, -4),
           ),
@@ -327,12 +330,12 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
           Expanded(
             child: TextField(
               controller: _msgCtrl,
-              style: const TextStyle(color: Color(0xFF4A3E65), fontSize: 14),
+              style: const TextStyle(color: Colors.white, fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Pregúntale a Potosí AI...',
-                hintStyle: const TextStyle(color: Color(0xFF9E92B4), fontSize: 13),
+                hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
                 filled: true,
-                fillColor: const Color(0xFFF8F6FC),
+                fillColor: AppColors.bg,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,

@@ -1,5 +1,11 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/event_model.dart';
 import '../services/api_service.dart';
 import '../main.dart' show AppColors;
@@ -14,6 +20,54 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isPurchasing = false;
+  bool _isAdmin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRole();
+  }
+
+  Future<void> _loadRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _isAdmin = (prefs.getInt('user_role_id') ?? 2) == 1;
+      });
+    }
+  }
+
+  Future<void> _openMap(String location) async {
+    final query = Uri.encodeComponent('$location, Potosí, Bolivia');
+    final geoUri = Uri.parse('geo:0,0?q=$query');
+    final webUri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+    try {
+      // Intentar primero con el esquema nativo geo: (abre la app de mapas directamente)
+      bool launched = await launchUrl(geoUri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        // Si no se puede, intentar con la URL de Google Maps web (abre navegador o app)
+        launched = await launchUrl(webUri, mode: LaunchMode.externalApplication);
+      }
+      if (!launched) {
+        throw 'No se pudo lanzar ninguna URL';
+      }
+    } catch (e) {
+      debugPrint('Error abriendo mapa: $e');
+      // Fallback de último recurso
+      try {
+        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+      } catch (innerError) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se pudo abrir el mapa en Google Maps.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    }
+  }
 
   Future<void> _purchaseTicket(int ticketTypeId, {String? promoCode, String? paymentMethod}) async {
     setState(() => _isPurchasing = true);
@@ -81,6 +135,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // Métodos de pago interactivos
     String paymentMethod = 'qr'; // 'qr', 'banco', 'efectivo'
     String uniquePaymentToken = 'PAGO-QR-${DateTime.now().millisecondsSinceEpoch}';
+    String? selectedReceiptPath;
 
     showDialog(
       context: context,
@@ -143,7 +198,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             const SizedBox(height: 6),
                             _purchaseRow('Descuento', '-${discountPercentage.toStringAsFixed(0)}%'),
                           ],
-                          const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Divider(color: Color(0xFF2A2A45), height: 1)),
+                          const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Divider(color: AppColors.cardBorder, height: 1)),
                           _purchaseRow('Total a Pagar', 'Bs. ${finalPrice.toStringAsFixed(2)}', isTotal: true),
                         ],
                       ),
@@ -290,6 +345,51 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         uniquePaymentToken,
                         style: const TextStyle(color: Colors.grey, fontSize: 10, fontFamily: 'monospace'),
                       ),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final ImagePicker picker = ImagePicker();
+                          final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+                          if (image != null) {
+                            setDialogState(() {
+                              selectedReceiptPath = image.path;
+                            });
+                          }
+                        },
+                        icon: Icon(
+                          selectedReceiptPath != null ? Icons.check_circle_rounded : Icons.image_rounded,
+                          size: 16,
+                        ),
+                        label: Text(
+                          selectedReceiptPath != null
+                              ? 'Comprobante cargado ✓'
+                              : 'Cargar Comprobante (Galería)',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: selectedReceiptPath != null
+                              ? AppColors.success.withOpacity(0.2)
+                              : AppColors.primary.withOpacity(0.2),
+                          foregroundColor: selectedReceiptPath != null
+                              ? AppColors.success
+                              : AppColors.primaryLight,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        ),
+                      ),
+                      if (selectedReceiptPath != null) ...[
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            File(selectedReceiptPath!),
+                            height: 80,
+                            width: 80,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ],
                     ] else if (paymentMethod == 'banco') ...[
                       Container(
                         width: double.infinity,
@@ -438,179 +538,376 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final event = widget.event;
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: CustomScrollView(
-        slivers: [
-          // AppBar with image
-          SliverAppBar(
-            expandedHeight: 280,
-            pinned: true,
-            backgroundColor: AppColors.surface,
-            elevation: 0,
-            leading: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(12),
+      body: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: CustomScrollView(
+            slivers: [
+              // AppBar with image
+              SliverAppBar(
+                expandedHeight: 280,
+                pinned: true,
+                backgroundColor: AppColors.surface,
+                elevation: 0,
+                leading: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
                 ),
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
-                  onPressed: () => Navigator.pop(context),
+                flexibleSpace: FlexibleSpaceBar(
+                  background: _buildHeroImage(event),
                 ),
               ),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: _buildHeroImage(event),
-            ),
-          ),
 
-          // Content
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Status badge + title
-                  Row(
+              // Content
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: event.status == 'active'
-                              ? AppColors.success.withOpacity(0.15)
-                              : Colors.orange.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: event.status == 'active'
-                                ? AppColors.success.withOpacity(0.4)
-                                : Colors.orange.withOpacity(0.4),
-                          ),
-                        ),
-                        child: Text(
-                          event.status == 'active' ? '● Activo' : '● ${event.status}',
-                          style: TextStyle(
-                            color: event.status == 'active' ? AppColors.success : Colors.orange,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      Icon(Icons.confirmation_number_outlined, size: 15, color: AppColors.textMuted),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${event.ticketsAvailable} restantes',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    event.title,
-                    style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Info chips
-                  _InfoTile(icon: Icons.location_on_rounded, label: 'Lugar', value: event.location, color: const Color(0xFFFF6B6B)),
-                  const SizedBox(height: 10),
-                  _InfoTile(icon: Icons.access_time_rounded, label: 'Fecha y Hora', value: event.eventDate, color: AppColors.primaryLight),
-                  const SizedBox(height: 10),
-                  _InfoTile(icon: Icons.people_alt_rounded, label: 'Capacidad', value: '${event.capacity} personas', color: AppColors.warning),
-
-                  // Artists
-                  if (event.artists.isNotEmpty) ...[
-                    const SizedBox(height: 28),
-                    _sectionTitle('Artistas'),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: event.artists.map((a) {
-                        final name = a['name'] ?? 'Artista';
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppColors.card,
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 26,
-                                height: 26,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    name[0].toUpperCase(),
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(name, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-
-                  // Description
-                  const SizedBox(height: 28),
-                  _sectionTitle('Descripción'),
-                  const SizedBox(height: 10),
-                  Text(
-                    event.description,
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.7),
-                  ),
-
-                  // Ticket Types
-                  if (event.ticketTypes.isNotEmpty) ...[
-                    const SizedBox(height: 32),
-                    _sectionTitle('Tipos de Entrada'),
-                    const SizedBox(height: 14),
-                    ...event.ticketTypes.map((tt) => _TicketTypeCard(
-                      ticketType: tt,
-                      isPurchasing: _isPurchasing,
-                      onBuy: () => _showPurchaseDialog(tt),
-                    )),
-                  ],
-
-                  if (event.ticketTypes.isEmpty) ...[
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.cardBorder),
-                      ),
-                      child: Row(
+                      // Status badge + title
+                      Row(
                         children: [
-                          Icon(Icons.info_outline_rounded, color: AppColors.textMuted, size: 22),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'No hay tipos de entrada disponibles para este evento.',
-                              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: event.status == 'active'
+                                  ? AppColors.success.withOpacity(0.15)
+                                  : Colors.orange.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: event.status == 'active'
+                                    ? AppColors.success.withOpacity(0.4)
+                                    : Colors.orange.withOpacity(0.4),
+                              ),
                             ),
+                            child: Text(
+                              event.status == 'active' ? '● Activo' : '● ${event.status}',
+                              style: TextStyle(
+                                color: event.status == 'active' ? AppColors.success : Colors.orange,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          Icon(Icons.confirmation_number_outlined, size: 15, color: AppColors.textMuted),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${event.ticketsAvailable} restantes',
+                            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ],
+                      const SizedBox(height: 14),
+                      Text(
+                        event.title,
+                        style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Info chips (date and capacity)
+                      _InfoTile(icon: Icons.access_time_rounded, label: 'Fecha y Hora', value: event.eventDate, color: AppColors.primaryLight),
+                      const SizedBox(height: 10),
+                      _InfoTile(icon: Icons.people_alt_rounded, label: 'Capacidad', value: '${event.capacity} personas', color: AppColors.warning),
+                      const SizedBox(height: 24),
+
+                      // Sección de Ubicación Premium
+                      _sectionTitle('📍 Ubicación del Evento'),
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.card,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.cardBorder, width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Simulación visual de mapa interactivo
+                            Container(
+                              height: 140,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(19)),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    const Color(0xFF0F172A),
+                                    AppColors.card.withOpacity(0.8),
+                                    const Color(0xFF1E293B),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                              child: Stack(
+                                children: [
+                                  // Gridlines de mapa simuladas
+                                  Positioned.fill(
+                                    child: Opacity(
+                                      opacity: 0.1,
+                                      child: GridPaper(
+                                        color: AppColors.primaryLight,
+                                        divisions: 2,
+                                        subdivisions: 1,
+                                        interval: 50,
+                                        child: Container(),
+                                      ),
+                                    ),
+                                  ),
+                                  // Círculos concéntricos de sonar para el marcador
+                                  Center(
+                                    child: Container(
+                                      width: 80,
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: AppColors.primary.withOpacity(0.15),
+                                      ),
+                                      child: Center(
+                                        child: Container(
+                                          width: 45,
+                                          height: 45,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: AppColors.primary.withOpacity(0.25),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  // Marcador de ubicación
+                                  Center(
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4)),
+                                        ],
+                                      ),
+                                      child: const Icon(
+                                        Icons.location_on_rounded,
+                                        color: Color(0xFFFF3B30),
+                                        size: 26,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Detalles de ubicación
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    event.location,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.map_outlined, color: AppColors.textSecondary, size: 14),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Potosí, Bolivia',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+                                  // Botón de Google Maps Premium
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 46,
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [Color(0xFF34A853), Color(0xFF4285F4)], // Colores estilo Google Maps
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF4285F4).withOpacity(0.25),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ElevatedButton.icon(
+                                        onPressed: () => _openMap(event.location),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.transparent,
+                                          shadowColor: Colors.transparent,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                        icon: const Icon(Icons.directions_rounded, color: Colors.white, size: 20),
+                                        label: const Text(
+                                          '¿Cómo llegar? (Abrir Google Maps)',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Artists
+                      if (event.artists.isNotEmpty) ...[
+                        const SizedBox(height: 28),
+                        _sectionTitle('Artistas'),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: event.artists.map((a) {
+                            final name = a['name'] ?? 'Artista';
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: AppColors.card,
+                                borderRadius: BorderRadius.circular(30),
+                                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 26,
+                                    height: 26,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        name[0].toUpperCase(),
+                                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(name, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+
+                      // Description
+                      const SizedBox(height: 28),
+                      _sectionTitle('Descripción'),
+                      const SizedBox(height: 10),
+                      Text(
+                        event.description,
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.7),
+                      ),
+
+                      // Ticket Types — solo visible para clientes (no admin)
+                      if (event.ticketTypes.isNotEmpty) ...[
+                        const SizedBox(height: 32),
+                        _sectionTitle('Tipos de Entrada'),
+                        const SizedBox(height: 14),
+                        if (_isAdmin)
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.cardBorder),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.admin_panel_settings_rounded,
+                                    color: AppColors.primary, size: 22),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Como administrador no puedes comprar tickets. Solo los clientes pueden adquirir entradas.',
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 13),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          ...event.ticketTypes.map((tt) => _TicketTypeCard(
+                            ticketType: tt,
+                            isPurchasing: _isPurchasing,
+                            onBuy: () => _showPurchaseDialog(tt),
+                          )),
+                      ],
+
+                      if (event.ticketTypes.isEmpty) ...[
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: AppColors.card,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.cardBorder),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline_rounded, color: AppColors.textMuted, size: 22),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'No hay tipos de entrada disponibles para este evento.',
+                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -619,7 +916,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (event.image != null && event.image!.isNotEmpty)
+        if (event.video != null && event.video!.isNotEmpty)
+          _DetailVideoPlayer(videoPath: event.video!)
+        else if (event.image != null && event.image!.isNotEmpty)
           FutureBuilder<String>(
             future: ApiService.getBaseUrl(),
             builder: (_, snap) {
@@ -659,7 +958,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF2A1550), Color(0xFF1A0A3D)],
+          colors: [Color(0xFF0C1D3A), Color(0xFF080D1A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -684,44 +983,66 @@ class _InfoTile extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final VoidCallback? onTap;
+  final Widget? trailing;
 
   const _InfoTile({
     required this.icon,
     required this.label,
     required this.value,
     required this.color,
+    this.onTap,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: onTap != null ? color.withOpacity(0.4) : AppColors.cardBorder,
+            width: onTap != null ? 1.2 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 20),
             ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
-              const SizedBox(height: 2),
-              Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: 8),
+              trailing!,
             ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -852,6 +1173,146 @@ class _TicketTypeCard extends StatelessWidget {
                     ],
                   ),
                 ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailVideoPlayer extends StatefulWidget {
+  final String videoPath;
+  const _DetailVideoPlayer({super.key, required this.videoPath});
+
+  @override
+  State<_DetailVideoPlayer> createState() => _DetailVideoPlayerState();
+}
+
+class _DetailVideoPlayerState extends State<_DetailVideoPlayer> {
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initPlayer();
+  }
+
+  Future<void> _initPlayer() async {
+    try {
+      final path = widget.videoPath;
+      
+      // Detectar si es una ruta local de archivo (modo mock / subida desde celular)
+      final bool isLocalFile = !kIsWeb &&
+          (path.startsWith('/') || path.startsWith('file://') ||
+           RegExp(r'^[A-Za-z]:\\').hasMatch(path));
+
+      if (isLocalFile) {
+        final localFile = File(path);
+        if (await localFile.exists()) {
+          _controller = VideoPlayerController.file(localFile);
+        } else {
+          if (mounted) setState(() => _hasError = true);
+          return;
+        }
+      } else if (path.startsWith('http://') || path.startsWith('https://')) {
+        // URL completa directa
+        _controller = VideoPlayerController.networkUrl(Uri.parse(path));
+      } else {
+        // Ruta relativa del servidor (ej: "videos/mi-video.mp4")
+        final baseUrl = await ApiService.getBaseUrl();
+        final cleanBase = baseUrl.replaceAll('/api', '');
+        final fullUrl = '$cleanBase/storage/$path';
+        _controller = VideoPlayerController.networkUrl(Uri.parse(fullUrl));
+      }
+
+      await _controller.initialize();
+      _controller.setLooping(true);
+      _controller.setVolume(1.0);
+      await _controller.play();
+
+      if (mounted) setState(() => _isInitialized = true);
+    } catch (e) {
+      debugPrint('Error cargando video: $e');
+      if (mounted) setState(() => _hasError = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasError) {
+      return const Center(
+        child: Icon(Icons.videocam_off_rounded, color: Colors.white30, size: 50),
+      );
+    }
+    
+    if (!_isInitialized) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF0294E3)),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _controller.value.isPlaying ? _controller.pause() : _controller.play();
+        });
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        alignment: Alignment.center,
+        children: [
+          FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: _controller.value.size.width,
+              height: _controller.value.size.height,
+              child: VideoPlayer(_controller),
+            ),
+          ),
+          if (!_controller.value.isPlaying)
+            Container(
+              color: Colors.black38,
+              child: const Center(
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 64,
+                ),
+              ),
+            ),
+          Positioned(
+            bottom: 12,
+            right: 12,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: Icon(
+                  _controller.value.volume > 0.0 ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+                onPressed: () {
+                  setState(() {
+                    if (_controller.value.volume > 0.0) {
+                      _controller.setVolume(0.0);
+                    } else {
+                      _controller.setVolume(1.0);
+                    }
+                  });
+                },
               ),
             ),
           ),

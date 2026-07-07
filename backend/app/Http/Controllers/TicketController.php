@@ -15,6 +15,7 @@ class TicketController extends Controller
     // COMPRAR TICKET
     public function purchase(Request $request)
     {
+        self::releaseExpiredReservations();
         $request->validate([
             'ticket_type_id' => 'required|exists:ticket_types,id',
             'payment_method' => 'nullable|string|in:efectivo,qr,banco',
@@ -71,6 +72,7 @@ class TicketController extends Controller
     // MIS TICKETS
     public function myTickets(Request $request)
     {
+        self::releaseExpiredReservations();
         $tickets = Ticket::with(['event', 'ticketType'])
                         ->where('user_id', $request->user()->id)
                         ->orderBy('created_at', 'desc')
@@ -82,6 +84,7 @@ class TicketController extends Controller
     // VER TICKET CON QR
     public function show($id, Request $request)
     {
+        self::releaseExpiredReservations();
         $ticket = Ticket::with(['event', 'ticketType'])
                         ->where('id', $id)
                         ->where('user_id', $request->user()->id)
@@ -97,6 +100,7 @@ class TicketController extends Controller
     // VALIDAR QR (Scanner)
     public function validateQR(Request $request)
     {
+        self::releaseExpiredReservations();
         $request->validate([
             'qr_token' => 'required|string',
         ]);
@@ -149,10 +153,61 @@ class TicketController extends Controller
     // VER TODOS LOS TICKETS (Admin)
     public function allTickets()
     {
+        self::releaseExpiredReservations();
         $tickets = Ticket::with(['event', 'ticketType', 'user'])
                         ->orderBy('created_at', 'desc')
                         ->get();
 
         return response()->json($tickets);
+    }
+
+    // EXPIRACIÓN AUTOMÁTICA DE RESERVAS (6 Horas)
+    private static function releaseExpiredReservations()
+    {
+        // Auto-limpieza de tickets huérfanos cuyos eventos ya no existen
+        $orphanTicketIds = Ticket::whereNotExists(function ($query) {
+            $query->select(DB::raw(1))
+                  ->from('events')
+                  ->whereRaw('events.id = tickets.event_id');
+        })->pluck('id');
+
+        if ($orphanTicketIds->isNotEmpty()) {
+            DB::transaction(function () use ($orphanTicketIds) {
+                Payment::whereIn('ticket_id', $orphanTicketIds)->delete();
+                Attendance::whereIn('ticket_id', $orphanTicketIds)->delete();
+                Ticket::whereIn('id', $orphanTicketIds)->delete();
+            });
+        }
+
+        $expiredTime = now()->subHours(6);
+
+        $expiredTickets = Ticket::where('status', 'pending')
+                                ->where('created_at', '<', $expiredTime)
+                                ->get();
+
+        if ($expiredTickets->isEmpty()) {
+            return;
+        }
+
+        DB::transaction(function () use ($expiredTickets) {
+            foreach ($expiredTickets as $ticket) {
+                // Cambiar estado a expirado
+                $ticket->update(['status' => 'expired']);
+
+                // Cancelar pago pendiente
+                Payment::where('ticket_id', $ticket->id)
+                       ->where('status', 'pending')
+                       ->update(['status' => 'failed']);
+
+                // Devolver stock
+                $ticketType = TicketType::with('event')->find($ticket->ticket_type_id);
+                if ($ticketType) {
+                    $ticketType->increment('stock');
+                    if ($ticketType->event) {
+                        $ticketType->event->increment('tickets_available');
+                    }
+                }
+            }
+        });
     }
 }
